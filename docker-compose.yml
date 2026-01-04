@@ -1,0 +1,17 @@
+services:
+  postgres:
+    image: postgres:15
+    container_name: mtechcare_container
+    restart: unless-stopped
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_USER: mtechcare
+      POSTGRES_PASSWORD: mtechcare123
+      POSTGRES_DB: mtechcare
+      TZ: Asia/Kolkata
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
