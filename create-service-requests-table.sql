@@ -23,3 +23,4 @@ CREATE INDEX IF NOT EXISTS idx_service_requests_timestamp ON service_requests(ti
 -- Create index on created_at for better query performance
 CREATE INDEX IF NOT EXISTS idx_service_requests_created_at ON service_requests(created_at);
 
+

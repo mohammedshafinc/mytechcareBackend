@@ -11,3 +11,4 @@ FROM admins
 WHERE LOWER(email) = LOWER('admin@mtechcare.com');
 
 
+
