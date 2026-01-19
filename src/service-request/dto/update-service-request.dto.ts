@@ -109,4 +109,13 @@ export class UpdateServiceRequestDto {
   @IsOptional()
   @IsString()
   dateTime?: string;
+
+  @ApiProperty({
+    example: 'Request received',
+    description: 'Status of the service request (e.g., Request received, IN_PROGRESS, COMPLETED, CANCELLED)',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  status?: string;
 }

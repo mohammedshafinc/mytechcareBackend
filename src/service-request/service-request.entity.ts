@@ -44,6 +44,15 @@ export class ServiceRequest {
   @Column({ type: 'timestamp' })
   timestamp: Date;
 
+  @Column({ 
+    name: 'status',
+    type: 'varchar', 
+    length: 50, 
+    default: 'Request received',
+    nullable: true 
+  })
+  status: string;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 }

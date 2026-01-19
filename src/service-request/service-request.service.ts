@@ -29,6 +29,7 @@ export class ServiceRequestService {
       language: createServiceRequestDto.language,
       dateTime: createServiceRequestDto.dateTime,
       timestamp: new Date(createServiceRequestDto.timestamp),
+      status: createServiceRequestDto.status || 'Request received',
     });
 
     const savedRequest = await this.serviceRequestRepository.save(serviceRequest);
@@ -51,6 +52,7 @@ export class ServiceRequestService {
         deviceDisplayName: savedRequest.deviceDisplayName,
         location: savedRequest.location,
         description: savedRequest.description,
+        status: savedRequest.status,
         timestamp: savedRequest.timestamp,
         createdAt: savedRequest.createdAt,
       },
