@@ -14,10 +14,34 @@ export class AuthController {
   @Post('login')
   @ApiResponse({ status: 200, description: 'Login successful' })
   @ApiResponse({ status: 400, description: 'Invalid Saudi number' })
-  login(@Body() loginDto: LoginDto) {
-    return this.authService.login(loginDto.number);
+  async login(
+    @Body() loginDto: LoginDto,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const result = await this.authService.login(loginDto.number);
+
+    // Determine cookie options based on environment
+    const isProduction = process.env.NODE_ENV === 'production';
+    const cookieOptions: any = {
+      httpOnly: true,
+      secure: isProduction, // Only secure in production
+      sameSite: isProduction ? 'none' : 'lax', // 'none' requires secure in production
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+      path: '/',
+    };
+
+    // Only set domain in production (not for localhost)
+    if (isProduction) {
+      cookieOptions.domain = '.mtechcare.com';
+    }
+
+    res.cookie('refreshToken', result.refreshToken, cookieOptions);
+
+    const { refreshToken, ...rest } = result;
+    return rest;
   }
 
+  
   @Post('admin/login')
   @ApiOperation({ summary: 'Admin login', description: 'Login endpoint for admin users with email and password' })
   @ApiBody({ type: AdminLoginDto })
@@ -33,14 +57,22 @@ export class AuthController {
       adminLoginDto.password,
     );
 
-    res.cookie('refreshToken', result.refreshToken, {
+    // Determine cookie options based on environment
+    const isProduction = process.env.NODE_ENV === 'production';
+    const cookieOptions: any = {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-      domain: '.mtechcare.com',
+      secure: isProduction, // Only secure in production
+      sameSite: isProduction ? 'none' : 'lax', // 'none' requires secure in production
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
       path: '/',
-    });
+    };
+
+    // Only set domain in production (not for localhost)
+    if (isProduction) {
+      cookieOptions.domain = '.mtechcare.com';
+    }
+
+    res.cookie('refreshToken', result.refreshToken, cookieOptions);
 
     const { refreshToken, ...rest } = result;
     return rest;

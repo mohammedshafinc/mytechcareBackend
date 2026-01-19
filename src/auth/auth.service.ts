@@ -48,9 +48,28 @@ export class AuthService {
       await this.userRepository.save(user);
     }
 
+    // Generate JWT tokens
+    const payload = {
+      sub: user.id,
+      phoneNumber: user.phoneNumber,
+      role: 'user',
+    };
+
+    const accessToken = this.jwtService.sign(payload, {
+      secret: process.env.JWT_ACCESS_SECRET,
+      expiresIn: '15m',
+    });
+
+    const refreshToken = this.jwtService.sign(payload, {
+      secret: process.env.JWT_REFRESH_SECRET,
+      expiresIn: '7d',
+    });
+
     return {
       success: true,
       message: 'Login successful',
+      accessToken,
+      refreshToken,
       user: {
         id: user.id,
         phoneNumber: user.phoneNumber,
