@@ -1,6 +1,6 @@
-const bcrypt = require('bcrypt');
+const bcrypt = require('bcryptjs');  // Changed from 'bcrypt' to 'bcryptjs'
 
-const password = 'Admin@123';
+const password = 'Mytech*2005';
 
 // Generate hash with salt rounds (10 is standard)
 bcrypt.hash(password, 10, (err, hash) => {
@@ -22,6 +22,3 @@ bcrypt.hash(password, 10, (err, hash) => {
     console.log('Verification test:', result ? '✓ Match' : '✗ No match');
   });
 });
-
-
-

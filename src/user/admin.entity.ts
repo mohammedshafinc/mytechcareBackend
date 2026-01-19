@@ -22,5 +22,13 @@ export class Admin {
 
   @Column({ name: 'last_login_at', nullable: true })
   lastLoginAt: Date;
+
+  @Column({
+    type: 'varchar',
+    length: 50,
+    default: 'ADMIN',
+  })
+  role: string;
+  
 }
 

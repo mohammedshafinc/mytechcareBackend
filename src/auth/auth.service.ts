@@ -3,7 +3,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from '../user/user.entity';
 import { Admin } from '../user/admin.entity';
-import * as bcrypt from 'bcrypt';
+import * as bcrypt from 'bcryptjs';
+
 
 @Injectable()
 export class AuthService {
@@ -85,6 +86,9 @@ export class AuthService {
     if (!isPasswordValid) {
       throw new UnauthorizedException('Invalid email or password');
     }
+
+
+
 
     // Update last login time
     admin.lastLoginAt = new Date();

@@ -1,14 +1,17 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ServiceRequest } from './service-request.entity';
 import { CreateServiceRequestDto } from './dto/create-service-request.dto';
+import { UpdateServiceRequestDto } from './dto/update-service-request.dto';
+import { AdminGateway } from '../admin/admin.gateway';
 
 @Injectable()
 export class ServiceRequestService {
   constructor(
     @InjectRepository(ServiceRequest)
     private serviceRequestRepository: Repository<ServiceRequest>,
+    private readonly adminGateway: AdminGateway,
   ) {}
 
   async create(createServiceRequestDto: CreateServiceRequestDto) {
@@ -29,6 +32,13 @@ export class ServiceRequestService {
     });
 
     const savedRequest = await this.serviceRequestRepository.save(serviceRequest);
+
+    // 🔥 Notify admin instantly
+    this.adminGateway.notifyNewRequest({
+      id: savedRequest.id,
+      name: savedRequest.name,
+      createdAt: savedRequest.createdAt,
+    });
 
     return {
       success: true,
@@ -58,6 +68,25 @@ export class ServiceRequestService {
       count: serviceRequests.length,
       data: serviceRequests,
     };
+  }
+
+  async update(id: number, updateDto: UpdateServiceRequestDto): Promise<ServiceRequest> {
+    // Find the service request
+    const serviceRequest = await this.serviceRequestRepository.findOne({
+      where: { id },
+    });
+
+    if (!serviceRequest) {
+      throw new NotFoundException('Service request not found');
+    }
+
+    // Update only the provided fields
+    Object.assign(serviceRequest, updateDto);
+
+    // Save the updated service request
+    const updatedRequest = await this.serviceRequestRepository.save(serviceRequest);
+
+    return updatedRequest;
   }
 }
 

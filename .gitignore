@@ -11,6 +11,17 @@ pnpm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 lerna-debug.log*
+# Environment files
+.env
+.env.local
+.env.development
+.env.development.local
+.env.production
+.env.production.local
+.env.*.local
+
+# Keep example file
+!.env.example
 
 # OS
 .DS_Store
