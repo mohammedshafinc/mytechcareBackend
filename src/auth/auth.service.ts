@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from '../user/user.entity';
 import { Admin } from '../user/admin.entity';
+import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
 
 
@@ -13,6 +14,7 @@ export class AuthService {
     private userRepository: Repository<User>,
     @InjectRepository(Admin)
     private adminRepository: Repository<Admin>,
+    private readonly jwtService: JwtService,
   ) {}
 
   async login(number: string) {
@@ -90,6 +92,22 @@ export class AuthService {
 
 
 
+    const payload = {
+      sub: admin.id,
+      email: admin.email,
+      role: admin.role || 'SUPER_ADMIN',
+    };
+
+    const accessToken = this.jwtService.sign(payload, {
+      secret: process.env.JWT_ACCESS_SECRET,
+      expiresIn: '15m',
+    });
+
+    const refreshToken = this.jwtService.sign(payload, {
+      secret: process.env.JWT_REFRESH_SECRET,
+      expiresIn: '7d',
+    });
+
     // Update last login time
     admin.lastLoginAt = new Date();
     await this.adminRepository.save(admin);
@@ -97,6 +115,8 @@ export class AuthService {
     return {
       success: true,
       message: 'Admin login successful',
+      accessToken,
+      refreshToken,
       admin: {
         id: admin.id,
         name: admin.name,
@@ -104,6 +124,40 @@ export class AuthService {
         lastLoginAt: admin.lastLoginAt,
       },
     };
+  }
+
+  refreshAccessToken(refreshToken: string) {
+    try {
+      const decoded = this.jwtService.verify(refreshToken, {
+        secret: process.env.JWT_REFRESH_SECRET,
+      });
+
+      if (
+        typeof decoded !== 'object' ||
+        decoded === null ||
+        !('sub' in decoded)
+      ) {
+        throw new UnauthorizedException('Invalid refresh token');
+      }
+
+      const payload = {
+        sub: (decoded as any).sub,
+        email: (decoded as any).email,
+        role: (decoded as any).role,
+      };
+
+      const accessToken = this.jwtService.sign(payload, {
+        secret: process.env.JWT_ACCESS_SECRET,
+        expiresIn: '15m',
+      });
+
+      return {
+        success: true,
+        accessToken,
+      };
+    } catch {
+      throw new UnauthorizedException('Invalid refresh token');
+    }
   }
 
   async getAllAdmins() {
@@ -116,6 +170,7 @@ export class AuthService {
       id: admin.id,
       name: admin.name,
       email: admin.email,
+      role: admin.role,
       isActive: admin.isActive,
       createdAt: admin.createdAt,
       lastLoginAt: admin.lastLoginAt,

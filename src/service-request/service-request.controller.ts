@@ -1,10 +1,13 @@
-import { Body, Controller, Get, Post, Put, Param, ParseIntPipe } from '@nestjs/common';
-import { ApiBody, ApiOperation, ApiResponse, ApiTags, ApiParam } from '@nestjs/swagger';
+import { Body, Controller, Get, Post, Put, Param, ParseIntPipe, UseGuards } from '@nestjs/common';
+import { AuthGuard } from '@nestjs/passport';
+import { ApiBearerAuth, ApiBody, ApiOperation, ApiResponse, ApiTags, ApiParam } from '@nestjs/swagger';
 import { ServiceRequestService } from './service-request.service';
 import { CreateServiceRequestDto } from './dto/create-service-request.dto';
 import { UpdateServiceRequestDto } from './dto/update-service-request.dto';
 
 @ApiTags('Service Request')
+@ApiBearerAuth()
+@UseGuards(AuthGuard('jwt'))
 @Controller('admin/service-request')
 export class ServiceRequestController {
   constructor(private readonly serviceRequestService: ServiceRequestService) {}
