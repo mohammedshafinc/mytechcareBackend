@@ -4,6 +4,8 @@ import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
 import { ServiceRequestModule } from './service-request/service-request.module';
 import { AdminModule } from './admin/admin.module';
+import { RepairItemModule } from './repair-item/repair-item.module';
+import { BillModule } from './bill/bill.module';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 
@@ -16,6 +18,8 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
     AuthModule,
     AdminModule,
     ServiceRequestModule,
+    RepairItemModule,
+    BillModule,
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => ({
