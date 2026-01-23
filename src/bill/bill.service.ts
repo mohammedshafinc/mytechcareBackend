@@ -1,9 +1,8 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, In } from 'typeorm';
+import { Repository } from 'typeorm';
 import { Bill } from './bill.entity';
 import { ServiceRequest } from '../service-request/service-request.entity';
-import { RepairItem } from '../repair-item/repair-item.entity';
 import { CreateBillDto } from './dto/create-bill.dto';
 
 @Injectable()
@@ -13,8 +12,6 @@ export class BillService {
     private billRepository: Repository<Bill>,
     @InjectRepository(ServiceRequest)
     private serviceRequestRepository: Repository<ServiceRequest>,
-    @InjectRepository(RepairItem)
-    private repairItemRepository: Repository<RepairItem>,
   ) {}
 
   async create(createBillDto: CreateBillDto) {
@@ -37,13 +34,15 @@ export class BillService {
     // Use service request id as user_id (as per requirement: user_id = service_request.id)
     const userId = serviceRequest.id;
 
+    // Use mobile from DTO if provided, otherwise use mobile from service request
+    const mobile = createBillDto.mobile || serviceRequest.mobile || null;
+
     // Create the bill
     const bill = this.billRepository.create({
       userId: userId, // user_id is the id from service_requests table
-      repairItemId: parseInt(createBillDto.repairItem),
       costPrice: parseFloat(createBillDto.costPrice),
       sellingPrice: parseFloat(createBillDto.customerPrice),
-      quantity: parseInt(createBillDto.quantity),
+      mobile: mobile,
       notes: createBillDto.notes || null,
       name: serviceRequest.name,
     });
@@ -57,37 +56,31 @@ export class BillService {
     };
   }
 
+  async findByMobile(mobile: string) {
+    const bills = await this.billRepository.find({
+      where: { mobile },
+      order: { createdAt: 'DESC' },
+    });
+
+    return {
+      success: true,
+      message: 'Bills fetched successfully',
+      count: bills.length,
+      data: bills,
+    };
+  }
+
   async findByUserId(userId: number) {
     const bills = await this.billRepository.find({
       where: { userId },
       order: { createdAt: 'DESC' },
     });
 
-    // Fetch repair items and create a map for quick lookup
-    const repairItemIds = [...new Set(bills.map(bill => bill.repairItemId))];
-    
-    let repairItemMap = new Map<number, string>();
-    if (repairItemIds.length > 0) {
-      const repairItems = await this.repairItemRepository.find({
-        where: { id: In(repairItemIds) },
-      });
-      repairItemMap = new Map(repairItems.map(item => [item.id, item.name]));
-    }
-
-    // Map bills to include repair item name instead of repairItemId
-    const billsWithRepairItemName = bills.map(bill => {
-      const { repairItemId, ...billWithoutRepairItemId } = bill;
-      return {
-        ...billWithoutRepairItemId,
-        repairItem: repairItemMap.get(repairItemId) || null,
-      };
-    });
-
     return {
       success: true,
       message: 'Bills fetched successfully',
-      count: billsWithRepairItemName.length,
-      data: billsWithRepairItemName,
+      count: bills.length,
+      data: bills,
     };
   }
 }

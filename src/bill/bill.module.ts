@@ -4,11 +4,10 @@ import { BillController } from './bill.controller';
 import { BillService } from './bill.service';
 import { Bill } from './bill.entity';
 import { ServiceRequest } from '../service-request/service-request.entity';
-import { RepairItem } from '../repair-item/repair-item.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Bill, ServiceRequest, RepairItem]),
+    TypeOrmModule.forFeature([Bill, ServiceRequest]),
   ],
   controllers: [BillController],
   providers: [BillService],

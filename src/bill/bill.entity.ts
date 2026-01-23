@@ -8,17 +8,14 @@ export class Bill {
   @Column({ name: 'user_id', type: 'int', nullable: true })
   userId: number | null;
 
-  @Column({ name: 'repair_item_id', type: 'int' })
-  repairItemId: number;
-
   @Column({ name: 'cost_price', type: 'decimal', precision: 10, scale: 2 })
   costPrice: number;
 
   @Column({ name: 'selling_price', type: 'decimal', precision: 10, scale: 2 })
   sellingPrice: number;
 
-  @Column({ type: 'int' })
-  quantity: number;
+  @Column({ type: 'varchar', length: 50, nullable: true })
+  mobile: string | null;
 
   @Column({ type: 'text', nullable: true })
   notes: string | null;

@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, ParseIntPipe, UseGuards, Request, BadRequestException } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, UseGuards, Request, BadRequestException } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { ApiBearerAuth, ApiBody, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { BillService } from './bill.service';
@@ -11,20 +11,20 @@ import { CreateBillDto } from './dto/create-bill.dto';
 export class BillController {
   constructor(private readonly billService: BillService) {}
 
-  @Get(':id')
+  @Get(':mobile')
   @ApiOperation({ 
-    summary: 'Get bills by user ID', 
-    description: 'Fetch all bills for a specific user by user ID' 
+    summary: 'Get bills by mobile number', 
+    description: 'Fetch all bills for a specific mobile number' 
   })
   @ApiParam({ 
-    name: 'id', 
-    type: Number, 
-    description: 'User ID' 
+    name: 'mobile', 
+    type: String, 
+    description: 'Mobile number' 
   })
   @ApiResponse({ status: 200, description: 'Bills fetched successfully' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  findByUserId(@Param('id', ParseIntPipe) userId: number) {
-    return this.billService.findByUserId(userId);
+  findByMobile(@Param('mobile') mobile: string) {
+    return this.billService.findByMobile(mobile);
   }
 
   @Post()
@@ -42,26 +42,19 @@ export class BillController {
     const createBillDto: CreateBillDto = {
       serviceRequestId: body.serviceRequestId || body.id,
       id: body.id,
-      repairItem: body.repairItem,
       costPrice: body.costPrice,
       customerPrice: body.customerPrice,
-      quantity: body.quantity,
+      mobile: body.mobile,
       notes: body.notes,
       userId: body.userId,
     };
     
     // Validate required fields
-    if (!createBillDto.repairItem) {
-      throw new BadRequestException('repairItem is required');
-    }
     if (!createBillDto.costPrice) {
       throw new BadRequestException('costPrice is required');
     }
     if (!createBillDto.customerPrice) {
       throw new BadRequestException('customerPrice is required');
-    }
-    if (!createBillDto.quantity) {
-      throw new BadRequestException('quantity is required');
     }
     
     // The service handles serviceRequestId validation and uses it as user_id

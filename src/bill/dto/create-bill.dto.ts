@@ -23,14 +23,6 @@ export class CreateBillDto {
   id?: string;
 
   @ApiProperty({
-    example: '1',
-    description: 'Repair item ID',
-  })
-  @IsNotEmpty()
-  @IsString()
-  repairItem: string;
-
-  @ApiProperty({
     example: '14.99',
     description: 'Cost price',
   })
@@ -47,12 +39,13 @@ export class CreateBillDto {
   customerPrice: string;
 
   @ApiProperty({
-    example: '2',
-    description: 'Quantity',
+    example: '+966501234567',
+    description: 'Mobile number',
+    required: false,
   })
-  @IsNotEmpty()
+  @IsOptional()
   @IsString()
-  quantity: string;
+  mobile?: string;
 
   @ApiProperty({
     example: 'ff',

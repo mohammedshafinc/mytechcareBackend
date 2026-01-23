@@ -1,7 +1,6 @@
-import { Controller, Get, Post, Body, UseGuards, Request, BadRequestException } from '@nestjs/common';
+import { Controller, Post, Body, UseGuards, Request, BadRequestException } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { ApiBearerAuth, ApiBody, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
-import { RepairItemService } from './repair-item.service';
 import { BillService } from '../bill/bill.service';
 import { CreateBillDto } from '../bill/dto/create-bill.dto';
 import { plainToInstance } from 'class-transformer';
@@ -13,20 +12,8 @@ import { validate } from 'class-validator';
 @Controller('repair-item')
 export class RepairItemController {
   constructor(
-    private readonly repairItemService: RepairItemService,
     private readonly billService: BillService,
   ) {}
-
-  @Get()
-  @ApiOperation({ 
-    summary: 'Get all repair items', 
-    description: 'Fetch all repair items from the database' 
-  })
-  @ApiResponse({ status: 200, description: 'Repair items fetched successfully' })
-  @ApiResponse({ status: 401, description: 'Unauthorized' })
-  findAll() {
-    return this.repairItemService.findAll();
-  }
 
   @Post('bill')
   @ApiOperation({ 
