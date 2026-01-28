@@ -2,6 +2,14 @@ import { Injectable } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 
+/** JWT payload for admin: { sub, email, role, modules }. modules come from login/refresh. */
+export type JwtPayload = {
+  sub: number;
+  email?: string;
+  role?: string;
+  modules?: string[];
+};
+
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor() {
@@ -11,7 +19,8 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     });
   }
 
-  async validate(payload: any) {
+  /** Pass through payload; modules are already in the token (set at login/refresh). */
+  validate(payload: JwtPayload) {
     return payload;
   }
 }

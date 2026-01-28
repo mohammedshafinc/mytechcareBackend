@@ -90,5 +90,19 @@ export class ServiceRequestService {
 
     return updatedRequest;
   }
+
+  async remove(id: number): Promise<{ message: string }> {
+    const serviceRequest = await this.serviceRequestRepository.findOne({
+      where: { id },
+    });
+
+    if (!serviceRequest) {
+      throw new NotFoundException('Service request not found');
+    }
+
+    await this.serviceRequestRepository.remove(serviceRequest);
+
+    return { message: 'Service request deleted successfully' };
+  }
 }
 

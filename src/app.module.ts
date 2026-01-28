@@ -8,6 +8,7 @@ import { BillModule } from './bill/bill.module';
 import { CorporateEnquiryModule } from './corporate-enquiry/corporate-enquiry.module';
 import { B2cEnquiryModule } from './b2c-enquiry/b2c-enquiry.module';
 import { SalesReportModule } from './sales-report/sales-report.module';
+import { ModuleDefinitionModule } from './module/module.module';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 
@@ -24,6 +25,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
     CorporateEnquiryModule,
     B2cEnquiryModule,
     SalesReportModule,
+    ModuleDefinitionModule,
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => ({

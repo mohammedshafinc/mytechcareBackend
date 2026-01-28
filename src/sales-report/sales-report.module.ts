@@ -6,10 +6,12 @@ import { Bill } from '../bill/bill.entity';
 import { ServiceRequest } from '../service-request/service-request.entity';
 import { CorporateEnquiry } from '../corporate-enquiry/corporate-enquiry.entity';
 import { B2cEnquiry } from '../b2c-enquiry/b2c-enquiry.entity';
+import { AuthModule } from '../auth/auth.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Bill, ServiceRequest, CorporateEnquiry, B2cEnquiry]),
+    AuthModule,
   ],
   controllers: [SalesReportController],
   providers: [SalesReportService],

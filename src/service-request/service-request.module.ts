@@ -4,11 +4,13 @@ import { ServiceRequestController } from './service-request.controller';
 import { ServiceRequestService } from './service-request.service';
 import { ServiceRequest } from './service-request.entity';
 import { AdminModule } from '../admin/admin.module';
+import { AuthModule } from '../auth/auth.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([ServiceRequest]),
     AdminModule,
+    AuthModule,
   ],
   controllers: [ServiceRequestController],
   providers: [ServiceRequestService],

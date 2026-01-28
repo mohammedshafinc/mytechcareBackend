@@ -1,13 +1,16 @@
-import { Body, Controller, Get, Post, Put, Param, ParseIntPipe, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Post, Put, Param, ParseIntPipe, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { ApiBearerAuth, ApiBody, ApiOperation, ApiResponse, ApiTags, ApiParam } from '@nestjs/swagger';
 import { ServiceRequestService } from './service-request.service';
 import { CreateServiceRequestDto } from './dto/create-service-request.dto';
 import { UpdateServiceRequestDto } from './dto/update-service-request.dto';
+import { ModuleGuard } from '../auth/guards/module.guard';
+import { RequireModule } from '../auth/decorators/require-module.decorator';
 
 @ApiTags('Service Request')
 @ApiBearerAuth()
-@UseGuards(AuthGuard('jwt'))
+@UseGuards(AuthGuard('jwt'), ModuleGuard)
+@RequireModule('CLIENTS')
 @Controller('admin/service-request')
 export class ServiceRequestController {
   constructor(private readonly serviceRequestService: ServiceRequestService) {}
@@ -59,6 +62,22 @@ export class ServiceRequestController {
       request: updatedRequest,
       data: updatedRequest,
     };
+  }
+
+  @Delete(':id')
+  @ApiOperation({
+    summary: 'Delete service request',
+    description: 'Delete a service request by ID',
+  })
+  @ApiParam({
+    name: 'id',
+    type: Number,
+    description: 'Service request ID',
+  })
+  @ApiResponse({ status: 200, description: 'Service request deleted successfully' })
+  @ApiResponse({ status: 404, description: 'Service request not found' })
+  async remove(@Param('id', ParseIntPipe) id: number) {
+    return this.serviceRequestService.remove(id);
   }
 }
 

@@ -1,11 +1,13 @@
-import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { BadRequestException, ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
+import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { User } from '../user/user.entity';
 import { Admin } from '../user/admin.entity';
+import { UserModuleEntity } from '../module/user-module.entity';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
-
+import { CreateAdminUserDto } from './dto/create-admin-user.dto';
+import { MODULE_CODES } from './constants/modules.constants';
 
 @Injectable()
 export class AuthService {
@@ -14,8 +16,237 @@ export class AuthService {
     private userRepository: Repository<User>,
     @InjectRepository(Admin)
     private adminRepository: Repository<Admin>,
+    @InjectRepository(UserModuleEntity)
+    private userModuleRepository: Repository<UserModuleEntity>,
     private readonly jwtService: JwtService,
+    @InjectDataSource() private dataSource: DataSource,
   ) {}
+
+  /** All module codes from the shared constant (use for SUPER_ADMIN or as reference list). */
+  getAllModuleCodes(): string[] {
+    return [...MODULE_CODES];
+  }
+
+  /**
+   * Get all available modules
+   */
+  async getAllModules(): Promise<{ code: string; name: string | null }[]> {
+    const rows = await this.dataSource.query<
+      { code: string; name: string | null }[]
+    >('SELECT code, name FROM modules ORDER BY code');
+    return rows;
+  }
+
+  /**
+   * Returns module codes allowed for the given role.
+   * SUPER_ADMIN gets all modules; other roles are resolved from role_modules.
+   */
+  async getModulesForRole(role: string): Promise<string[]> {
+    if (role === 'SUPER_ADMIN') {
+      return this.getAllModuleCodes();
+    }
+    const rows = await this.dataSource.query<{ module_code: string }[]>(
+      'SELECT module_code FROM role_modules WHERE role = $1',
+      [role],
+    );
+    return rows.map((r) => r.module_code);
+  }
+
+  /**
+   * Get modules for a specific user (user-level > role-level for non-SUPER_ADMIN)
+   */
+  async getModulesForUser(userId: number): Promise<string[]> {
+    const admin = await this.adminRepository.findOne({ where: { id: userId } });
+    if (!admin) {
+      throw new UnauthorizedException('Admin not found');
+    }
+
+    // SUPER_ADMIN always gets all modules
+    if (admin.role === 'SUPER_ADMIN') {
+      return this.getAllModuleCodes();
+    }
+
+    // Check for user-specific modules first
+    const userModules = await this.dataSource.query<{ module_code: string }[]>(
+      'SELECT module_code FROM user_modules WHERE user_id = $1',
+      [userId],
+    );
+
+    if (userModules.length > 0) {
+      return userModules.map((r) => r.module_code);
+    }
+
+    // Fall back to role-based modules
+    return this.getModulesForRole(admin.role ?? 'ADMIN');
+  }
+
+  /**
+   * Get all users with their modules for RBAC management
+   */
+  async getAllUsersWithModules(): Promise<{
+    users: Array<{
+      id: number;
+      name: string | null;
+      email: string;
+      role: string;
+      isActive: boolean;
+      modules: string[];
+      hasCustomModules: boolean;
+    }>;
+    allModules: { code: string; name: string | null }[];
+  }> {
+    const admins = await this.adminRepository.find({
+      order: { createdAt: 'DESC' },
+    });
+
+    const allModules = await this.getAllModules();
+    const allModuleCodes = this.getAllModuleCodes();
+
+    const users = await Promise.all(
+      admins.map(async (admin) => {
+        // Check for user-specific modules
+        const userModules = await this.dataSource.query<
+          { module_code: string }[]
+        >('SELECT module_code FROM user_modules WHERE user_id = $1', [admin.id]);
+
+        let modules: string[];
+        let hasCustomModules = false;
+
+        if (admin.role === 'SUPER_ADMIN') {
+          modules = allModuleCodes;
+        } else if (userModules.length > 0) {
+          modules = userModules.map((r) => r.module_code);
+          hasCustomModules = true;
+        } else {
+          modules = await this.getModulesForRole(admin.role ?? 'ADMIN');
+        }
+
+        return {
+          id: admin.id,
+          name: admin.name ?? null,
+          email: admin.email,
+          role: admin.role ?? 'ADMIN',
+          isActive: admin.isActive,
+          modules,
+          hasCustomModules,
+        };
+      }),
+    );
+
+    return { users, allModules };
+  }
+
+  /**
+   * Update modules for a specific user
+   */
+  async updateUserModules(
+    userId: number,
+    modules: string[],
+    requestingUserId: number,
+  ): Promise<{ success: boolean; message: string; modules: string[] }> {
+    const admin = await this.adminRepository.findOne({ where: { id: userId } });
+    if (!admin) {
+      throw new BadRequestException('User not found');
+    }
+
+    // Prevent modifying SUPER_ADMIN permissions
+    if (admin.role === 'SUPER_ADMIN') {
+      throw new BadRequestException('Cannot modify Super Admin permissions');
+    }
+
+    // Prevent self-modification (optional security)
+    if (userId === requestingUserId) {
+      throw new BadRequestException('Cannot modify your own permissions');
+    }
+
+    // Validate module codes
+    const validModules = this.getAllModuleCodes();
+    const invalidModules = modules.filter((m) => !validModules.includes(m));
+    if (invalidModules.length > 0) {
+      throw new BadRequestException(
+        `Invalid module codes: ${invalidModules.join(', ')}`,
+      );
+    }
+
+    // Delete existing user modules
+    await this.dataSource.query('DELETE FROM user_modules WHERE user_id = $1', [
+      userId,
+    ]);
+
+    // Insert new modules
+    for (const moduleCode of modules) {
+      await this.dataSource.query(
+        'INSERT INTO user_modules (user_id, module_code) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+        [userId, moduleCode],
+      );
+    }
+
+    return {
+      success: true,
+      message: 'User modules updated successfully',
+      modules,
+    };
+  }
+
+  /**
+   * Reset user to role-based modules (remove custom assignments)
+   */
+  async resetUserToRoleModules(
+    userId: number,
+    requestingUserId: number,
+  ): Promise<{ success: boolean; message: string; modules: string[] }> {
+    const admin = await this.adminRepository.findOne({ where: { id: userId } });
+    if (!admin) {
+      throw new BadRequestException('User not found');
+    }
+
+    if (admin.role === 'SUPER_ADMIN') {
+      throw new BadRequestException('Cannot modify Super Admin permissions');
+    }
+
+    if (userId === requestingUserId) {
+      throw new BadRequestException('Cannot modify your own permissions');
+    }
+
+    // Delete user-specific modules
+    await this.dataSource.query('DELETE FROM user_modules WHERE user_id = $1', [
+      userId,
+    ]);
+
+    // Return role-based modules
+    const modules = await this.getModulesForRole(admin.role ?? 'ADMIN');
+
+    return {
+      success: true,
+      message: 'User reset to role-based modules',
+      modules,
+    };
+  }
+
+  /**
+   * Loads admin by id, resolves modules for their role, and returns
+   * { id, email, name, role, modules }. Throws if admin not found.
+   */
+  async getAdminMe(userId: number): Promise<{
+    id: number;
+    email: string;
+    name: string | null;
+    role: string;
+    modules: string[];
+  }> {
+    const admin = await this.adminRepository.findOne({ where: { id: userId } });
+    if (!admin) {
+      throw new UnauthorizedException('Admin not found');
+    }
+    const modules = await this.getModulesForUser(admin.id);
+    return {
+      id: admin.id,
+      email: admin.email,
+      name: admin.name ?? null,
+      role: admin.role ?? 'SUPER_ADMIN',
+      modules,
+    };
+  }
 
   async login(number: string) {
     if (!number) {
@@ -111,10 +342,13 @@ export class AuthService {
 
 
 
+    const role = admin.role || 'SUPER_ADMIN';
+    const modules = await this.getModulesForUser(admin.id);
     const payload = {
       sub: admin.id,
       email: admin.email,
-      role: admin.role || 'SUPER_ADMIN',
+      role,
+      modules,
     };
 
     const accessToken = this.jwtService.sign(payload, {
@@ -145,11 +379,11 @@ export class AuthService {
     };
   }
 
-  refreshAccessToken(refreshToken: string) {
+  async refreshAccessToken(refreshToken: string) {
     try {
       const decoded = this.jwtService.verify(refreshToken, {
         secret: process.env.JWT_REFRESH_SECRET,
-      });
+      }) as { sub: number; email?: string; role?: string; modules?: string[] };
 
       if (
         typeof decoded !== 'object' ||
@@ -159,10 +393,13 @@ export class AuthService {
         throw new UnauthorizedException('Invalid refresh token');
       }
 
+      const modules = await this.getModulesForUser(decoded.sub);
+      const role = decoded.role ?? 'SUPER_ADMIN';
       const payload = {
-        sub: (decoded as any).sub,
-        email: (decoded as any).email,
-        role: (decoded as any).role,
+        sub: decoded.sub,
+        email: decoded.email,
+        role,
+        modules,
       };
 
       const accessToken = this.jwtService.sign(payload, {
@@ -200,6 +437,45 @@ export class AuthService {
       message: 'Admins fetched successfully',
       count: adminsWithoutPassword.length,
       admins: adminsWithoutPassword,
+    };
+  }
+
+  async createAdminUser(dto: CreateAdminUserDto) {
+    const normalizedEmail = dto.email.trim().toLowerCase();
+
+    const existing = await this.adminRepository
+      .createQueryBuilder('admin')
+      .where('LOWER(admin.email) = LOWER(:email)', { email: normalizedEmail })
+      .getOne();
+
+    if (existing) {
+      throw new ConflictException('An admin with this email already exists');
+    }
+
+    const saltRounds = 10;
+    const hashedPassword = await bcrypt.hash(dto.password, saltRounds);
+
+    const admin = this.adminRepository.create({
+      email: normalizedEmail,
+      password: hashedPassword,
+      role: dto.role,
+      ...(dto.name != null && dto.name !== '' && { name: dto.name }),
+      isActive: true,
+    });
+
+    const saved = await this.adminRepository.save(admin);
+
+    return {
+      success: true,
+      message: 'Admin user created successfully. They can log in with this email and password.',
+      admin: {
+        id: saved.id,
+        email: saved.email,
+        name: saved.name,
+        role: saved.role,
+        isActive: saved.isActive,
+        createdAt: saved.createdAt,
+      },
     };
   }
 }

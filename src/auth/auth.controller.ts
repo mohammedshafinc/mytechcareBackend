@@ -1,8 +1,13 @@
-import { Body, Controller, Get, Post, Req, Res, UnauthorizedException } from '@nestjs/common';
-import { ApiBody, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { Body, Controller, Get, Param, ParseIntPipe, Post, Req, Res, UnauthorizedException, UseGuards } from '@nestjs/common';
+import { AuthGuard } from '@nestjs/passport';
+import { ApiBearerAuth, ApiBody, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { AdminLoginDto } from './dto/admin-login.dto';
+import { CreateAdminUserDto } from './dto/create-admin-user.dto';
+import { UpdateUserModulesDto } from './dto/update-user-modules.dto';
+import { ModuleGuard } from './guards/module.guard';
+import { RequireModule } from './decorators/require-module.decorator';
 import type { Request } from 'express';
 import type { Response } from 'express';
 
@@ -89,10 +94,121 @@ export class AuthController {
     return this.authService.refreshAccessToken(refreshToken);
   }
 
+  @Get('admin/permissions')
+  @UseGuards(AuthGuard('jwt'))
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get current admin permissions',
+    description: 'Returns the authenticated admin’s id, email, name, role, and allowed module codes. Requires JWT.',
+  })
+  @ApiResponse({ status: 200, description: 'Admin and permissions returned' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async getAdminPermissions(@Req() req: Request & { user?: { sub: number; email?: string; role?: string } }) {
+    const userId = req.user?.sub;
+    if (userId == null) throw new UnauthorizedException();
+    return this.authService.getAdminMe(Number(userId));
+  }
+
   @Get('admin/users')
+  @UseGuards(AuthGuard('jwt'), ModuleGuard)
+  @RequireModule('AUTH')
+  @ApiBearerAuth()
   @ApiOperation({ summary: 'Get all admin users', description: 'Fetch all admin users from the database (passwords are excluded for security)' })
   @ApiResponse({ status: 200, description: 'Admins fetched successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden – AUTH module required' })
   getAllAdmins() {
     return this.authService.getAllAdmins();
+  }
+
+  @Get('admin/modules')
+  @UseGuards(AuthGuard('jwt'), ModuleGuard)
+  @RequireModule('AUTH')
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get all modules',
+    description: 'Returns all available modules in the system',
+  })
+  @ApiResponse({ status: 200, description: 'Modules fetched successfully' })
+  getAllModules() {
+    return this.authService.getAllModules();
+  }
+
+  @Get('admin/users/modules')
+  @UseGuards(AuthGuard('jwt'), ModuleGuard)
+  @RequireModule('AUTH')
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get all users with modules',
+    description:
+      'Returns all admin users with their assigned modules for RBAC management',
+  })
+  @ApiResponse({ status: 200, description: 'Users with modules fetched successfully' })
+  getAllUsersWithModules() {
+    return this.authService.getAllUsersWithModules();
+  }
+
+  @Post('admin/users/modules')
+  @UseGuards(AuthGuard('jwt'), ModuleGuard)
+  @RequireModule('AUTH')
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Update user modules',
+    description:
+      'Update module permissions for a specific user. Cannot modify SUPER_ADMIN.',
+  })
+  @ApiBody({ type: UpdateUserModulesDto })
+  @ApiResponse({ status: 200, description: 'User modules updated successfully' })
+  @ApiResponse({
+    status: 400,
+    description: 'Cannot modify Super Admin or invalid modules',
+  })
+  updateUserModules(
+    @Body() dto: UpdateUserModulesDto,
+    @Req() req: Request & { user?: { sub: number } },
+  ) {
+    const requestingUserId = req.user?.sub;
+    if (!requestingUserId) throw new UnauthorizedException();
+    return this.authService.updateUserModules(
+      dto.userId,
+      dto.modules,
+      requestingUserId,
+    );
+  }
+
+  @Post('admin/users/:userId/reset-modules')
+  @UseGuards(AuthGuard('jwt'), ModuleGuard)
+  @RequireModule('AUTH')
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Reset user to role modules',
+    description: 'Remove custom module assignments and reset to role-based defaults',
+  })
+  @ApiResponse({ status: 200, description: 'User reset to role-based modules' })
+  resetUserModules(
+    @Param('userId', ParseIntPipe) userId: number,
+    @Req() req: Request & { user?: { sub: number } },
+  ) {
+    const requestingUserId = req.user?.sub;
+    if (!requestingUserId) throw new UnauthorizedException();
+    return this.authService.resetUserToRoleModules(userId, requestingUserId);
+  }
+
+  @Post('admin/users')
+  @UseGuards(AuthGuard('jwt'), ModuleGuard)
+  @RequireModule('AUTH')
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Create admin user',
+    description: 'Create a new admin user. Requires authentication. Provide email, password, and role. The new user can log in with email and password.',
+  })
+  @ApiBody({ type: CreateAdminUserDto })
+  @ApiResponse({ status: 201, description: 'Admin user created successfully' })
+  @ApiResponse({ status: 400, description: 'Validation error (invalid email, short password, invalid role)' })
+  @ApiResponse({ status: 409, description: 'An admin with this email already exists' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden – AUTH module required' })
+  createAdminUser(@Body() dto: CreateAdminUserDto) {
+    return this.authService.createAdminUser(dto);
   }
 }

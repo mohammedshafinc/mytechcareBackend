@@ -3,12 +3,15 @@ import { AuthGuard } from '@nestjs/passport';
 import { ApiBearerAuth, ApiBody, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { BillService } from '../bill/bill.service';
 import { CreateBillDto } from '../bill/dto/create-bill.dto';
+import { ModuleGuard } from '../auth/guards/module.guard';
+import { RequireModule } from '../auth/decorators/require-module.decorator';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 
 @ApiTags('Repair Item')
 @ApiBearerAuth()
-@UseGuards(AuthGuard('jwt'))
+@UseGuards(AuthGuard('jwt'), ModuleGuard)
+@RequireModule('CLIENTS')
 @Controller('repair-item')
 export class RepairItemController {
   constructor(

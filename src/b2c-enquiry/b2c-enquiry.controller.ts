@@ -4,10 +4,13 @@ import { ApiTags, ApiOperation, ApiBody, ApiResponse, ApiBearerAuth, ApiParam } 
 import { B2cEnquiryService } from './b2c-enquiry.service';
 import { CreateB2cEnquiryDto } from './dto/create-b2c-enquiry.dto';
 import { UpdateB2cEnquiryDto } from './dto/update-b2c-enquiry.dto';
+import { ModuleGuard } from '../auth/guards/module.guard';
+import { RequireModule } from '../auth/decorators/require-module.decorator';
 
 @ApiTags('B2C Enquiry')
 @ApiBearerAuth()
-@UseGuards(AuthGuard('jwt'))
+@UseGuards(AuthGuard('jwt'), ModuleGuard)
+@RequireModule('ENQUIRE')
 @Controller('enquire/b2c')
 export class B2cEnquiryController {
   constructor(private readonly b2cEnquiryService: B2cEnquiryService) {}

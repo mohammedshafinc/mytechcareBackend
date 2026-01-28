@@ -3,10 +3,13 @@ import { AuthGuard } from '@nestjs/passport';
 import { ApiBearerAuth, ApiBody, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { BillService } from './bill.service';
 import { CreateBillDto } from './dto/create-bill.dto';
+import { ModuleGuard } from '../auth/guards/module.guard';
+import { RequireModule } from '../auth/decorators/require-module.decorator';
 
 @ApiTags('Bill')
 @ApiBearerAuth()
-@UseGuards(AuthGuard('jwt'))
+@UseGuards(AuthGuard('jwt'), ModuleGuard)
+@RequireModule('CLIENTS')
 @Controller('bill')
 export class BillController {
   constructor(private readonly billService: BillService) {}

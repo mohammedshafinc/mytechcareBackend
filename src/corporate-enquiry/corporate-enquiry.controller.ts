@@ -4,10 +4,13 @@ import { ApiTags, ApiOperation, ApiBody, ApiResponse, ApiBearerAuth, ApiParam } 
 import { CorporateEnquiryService } from './corporate-enquiry.service';
 import { CreateCorporateEnquiryDto } from './dto/create-corporate-enquiry.dto';
 import { UpdateCorporateEnquiryDto } from './dto/update-corporate-enquiry.dto';
+import { ModuleGuard } from '../auth/guards/module.guard';
+import { RequireModule } from '../auth/decorators/require-module.decorator';
 
 @ApiTags('Corporate Enquiry')
 @ApiBearerAuth()
-@UseGuards(AuthGuard('jwt'))
+@UseGuards(AuthGuard('jwt'), ModuleGuard)
+@RequireModule('ENQUIRE')
 @Controller('enquire/corporate')
 export class CorporateEnquiryController {
   constructor(private readonly corporateEnquiryService: CorporateEnquiryService) {}
