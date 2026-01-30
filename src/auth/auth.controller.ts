@@ -1,10 +1,12 @@
-import { Body, Controller, Get, Param, ParseIntPipe, Post, Req, Res, UnauthorizedException, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Req, Res, UnauthorizedException, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { ApiBearerAuth, ApiBody, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { AdminLoginDto } from './dto/admin-login.dto';
 import { CreateAdminUserDto } from './dto/create-admin-user.dto';
+import { UpdateAdminUserDto } from './dto/update-admin-user.dto';
+import { BlockLoginDto } from './dto/block-login.dto';
 import { UpdateUserModulesDto } from './dto/update-user-modules.dto';
 import { ModuleGuard } from './guards/module.guard';
 import { RequireModule } from './decorators/require-module.decorator';
@@ -210,5 +212,71 @@ export class AuthController {
   @ApiResponse({ status: 403, description: 'Forbidden – AUTH module required' })
   createAdminUser(@Body() dto: CreateAdminUserDto) {
     return this.authService.createAdminUser(dto);
+  }
+
+  @Patch('admin/users/:userId')
+  @UseGuards(AuthGuard('jwt'), ModuleGuard)
+  @RequireModule('AUTH')
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Edit admin user',
+    description:
+      'Update an existing admin user. Provide only the fields you want to change (email, password, role, name, isActive).',
+  })
+  @ApiBody({ type: UpdateAdminUserDto })
+  @ApiResponse({ status: 200, description: 'Admin user updated successfully' })
+  @ApiResponse({ status: 400, description: 'Validation error or user not found' })
+  @ApiResponse({ status: 409, description: 'An admin with this email already exists' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden – AUTH module required' })
+  updateAdminUser(
+    @Param('userId', ParseIntPipe) userId: number,
+    @Body() dto: UpdateAdminUserDto,
+  ) {
+    return this.authService.updateAdminUser(userId, dto);
+  }
+
+  @Patch('admin/users/:userId/block-login')
+  @UseGuards(AuthGuard('jwt'), ModuleGuard)
+  @RequireModule('AUTH')
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Block or allow login',
+    description:
+      'When blocked is true, this account cannot log in. When false, login is allowed again. Blocked users see "Authentication blocked for this account" on login.',
+  })
+  @ApiBody({ type: BlockLoginDto })
+  @ApiResponse({ status: 200, description: 'Block/login state updated' })
+  @ApiResponse({ status: 400, description: 'User not found' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden – AUTH module required' })
+  setBlockLogin(
+    @Param('userId', ParseIntPipe) userId: number,
+    @Body() dto: BlockLoginDto,
+  ) {
+    return this.authService.setBlockLogin(userId, dto);
+  }
+
+  @Delete('admin/users/:userId')
+  @UseGuards(AuthGuard('jwt'), ModuleGuard)
+  @RequireModule('AUTH')
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Delete admin user',
+    description:
+      'Permanently delete an admin user. Cannot delete Super Admin or your own account. User modules are removed first.',
+  })
+  @ApiResponse({ status: 200, description: 'Admin user deleted successfully' })
+  @ApiResponse({ status: 400, description: 'Cannot delete Super Admin or your own account' })
+  @ApiResponse({ status: 404, description: 'User not found' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden – AUTH module required' })
+  deleteAdminUser(
+    @Param('userId', ParseIntPipe) userId: number,
+    @Req() req: Request & { user?: { sub: number } },
+  ) {
+    const requestingUserId = req.user?.sub;
+    if (!requestingUserId) throw new UnauthorizedException();
+    return this.authService.deleteAdminUser(userId, requestingUserId);
   }
 }

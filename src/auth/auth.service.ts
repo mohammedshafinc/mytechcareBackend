@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { User } from '../user/user.entity';
@@ -7,6 +7,8 @@ import { UserModuleEntity } from '../module/user-module.entity';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
 import { CreateAdminUserDto } from './dto/create-admin-user.dto';
+import { UpdateAdminUserDto } from './dto/update-admin-user.dto';
+import { BlockLoginDto } from './dto/block-login.dto';
 import { MODULE_CODES } from './constants/modules.constants';
 
 @Injectable()
@@ -328,7 +330,7 @@ export class AuthService {
     }
 
     if (!admin.isActive) {
-      throw new UnauthorizedException('Admin account is inactive');
+      throw new UnauthorizedException('Authentication blocked for this account');
     }
 
     // Verify password
@@ -476,6 +478,106 @@ export class AuthService {
         isActive: saved.isActive,
         createdAt: saved.createdAt,
       },
+    };
+  }
+
+  /**
+   * Update an existing admin user by id. Only provided fields are updated.
+   */
+  async updateAdminUser(userId: number, dto: UpdateAdminUserDto) {
+    const admin = await this.adminRepository.findOne({ where: { id: userId } });
+    if (!admin) {
+      throw new BadRequestException('User not found');
+    }
+
+    if (dto.email != null) {
+      const normalizedEmail = dto.email.trim().toLowerCase();
+      const existing = await this.adminRepository
+        .createQueryBuilder('admin')
+        .where('LOWER(admin.email) = LOWER(:email)', { email: normalizedEmail })
+        .andWhere('admin.id != :userId', { userId })
+        .getOne();
+      if (existing) {
+        throw new ConflictException('An admin with this email already exists');
+      }
+      admin.email = normalizedEmail;
+    }
+
+    if (dto.password != null) {
+      const saltRounds = 10;
+      admin.password = await bcrypt.hash(dto.password, saltRounds);
+    }
+
+    if (dto.role != null) {
+      admin.role = dto.role;
+    }
+
+    if (dto.name !== undefined) {
+      admin.name = dto.name ?? null;
+    }
+
+    if (dto.isActive !== undefined) {
+      admin.isActive = dto.isActive;
+    }
+
+    const saved = await this.adminRepository.save(admin);
+
+    return {
+      success: true,
+      message: 'Admin user updated successfully',
+      admin: {
+        id: saved.id,
+        email: saved.email,
+        name: saved.name,
+        role: saved.role,
+        isActive: saved.isActive,
+        createdAt: saved.createdAt,
+        lastLoginAt: saved.lastLoginAt,
+      },
+    };
+  }
+
+  /**
+   * Block or unblock login for an admin user. When blocked, admin cannot log in.
+   */
+  async setBlockLogin(userId: number, dto: BlockLoginDto) {
+    const admin = await this.adminRepository.findOne({ where: { id: userId } });
+    if (!admin) {
+      throw new BadRequestException('User not found');
+    }
+    admin.isActive = !dto.blocked;
+    await this.adminRepository.save(admin);
+    return {
+      success: true,
+      message: dto.blocked
+        ? 'Login blocked for this account'
+        : 'Login allowed for this account',
+      blocked: dto.blocked,
+      userId: admin.id,
+    };
+  }
+
+  /**
+   * Delete an admin user by id. Removes user_modules first, then the admin.
+   * Cannot delete SUPER_ADMIN or yourself.
+   */
+  async deleteAdminUser(userId: number, requestingUserId: number) {
+    const admin = await this.adminRepository.findOne({ where: { id: userId } });
+    if (!admin) {
+      throw new NotFoundException('User not found');
+    }
+    if (admin.role === 'SUPER_ADMIN') {
+      throw new BadRequestException('Cannot delete Super Admin');
+    }
+    if (userId === requestingUserId) {
+      throw new BadRequestException('Cannot delete your own account');
+    }
+    await this.dataSource.query('DELETE FROM user_modules WHERE user_id = $1', [userId]);
+    await this.adminRepository.remove(admin);
+    return {
+      success: true,
+      message: 'Admin user deleted successfully',
+      userId,
     };
   }
 }

@@ -8,6 +8,7 @@ export const MODULE_CODES = [
   'ORGANIZATION',
   'REPORTS',
   'ENQUIRE',
+  'DASHBOARD',
 ] as const;
 
 export type ModuleCode = (typeof MODULE_CODES)[number];
