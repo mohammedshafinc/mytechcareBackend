@@ -104,5 +104,18 @@ export class ServiceRequestService {
 
     return { message: 'Service request deleted successfully' };
   }
+
+  /**
+   * Find all service requests for a given mobile number (client-side).
+   * Returns id, status, name, device only.
+   */
+  async findByMobile(mobile: string): Promise<{ id: number; status: string; name: string; device: string }[]> {
+    const requests = await this.serviceRequestRepository.find({
+      where: { mobile },
+      order: { createdAt: 'DESC' },
+      select: ['id', 'status', 'name', 'device'],
+    });
+    return requests;
+  }
 }
 

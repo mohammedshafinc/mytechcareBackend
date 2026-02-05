@@ -10,7 +10,6 @@ import { RequireModule } from '../auth/decorators/require-module.decorator';
 @ApiTags('Service Request')
 @ApiBearerAuth()
 @UseGuards(AuthGuard('jwt'), ModuleGuard)
-@RequireModule('CLIENTS')
 @Controller('admin/service-request')
 export class ServiceRequestController {
   constructor(private readonly serviceRequestService: ServiceRequestService) {}
@@ -28,6 +27,7 @@ export class ServiceRequestController {
   }
 
   @Get()
+  @RequireModule('CLIENTS')
   @ApiOperation({ 
     summary: 'Get all service requests', 
     description: 'Fetch all service requests from the database, ordered by creation date (newest first)' 
@@ -38,6 +38,7 @@ export class ServiceRequestController {
   }
 
   @Put(':id')
+  @RequireModule('CLIENTS')
   @ApiOperation({ 
     summary: 'Update service request', 
     description: 'Update a service request by ID' 
@@ -65,6 +66,7 @@ export class ServiceRequestController {
   }
 
   @Delete(':id')
+  @RequireModule('CLIENTS')
   @ApiOperation({
     summary: 'Delete service request',
     description: 'Delete a service request by ID',
