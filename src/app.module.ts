@@ -10,8 +10,11 @@ import { B2cEnquiryModule } from './b2c-enquiry/b2c-enquiry.module';
 import { SalesReportModule } from './sales-report/sales-report.module';
 import { ModuleDefinitionModule } from './module/module.module';
 import { StoreModule } from './store/store.module';
+import { StaffModule } from './staff/staff.module';
+import { NotificationModule } from './notification/notification.module';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
   imports: [
@@ -19,6 +22,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
       isGlobal: true,
       envFilePath: process.env.NODE_ENV === 'production' ? '.env.production' : '.env.development',
     }),
+    ScheduleModule.forRoot(),
     AuthModule,
     AdminModule,
     ServiceRequestModule,
@@ -28,6 +32,8 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
     SalesReportModule,
     ModuleDefinitionModule,
     StoreModule,
+    StaffModule,
+    NotificationModule,
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => ({

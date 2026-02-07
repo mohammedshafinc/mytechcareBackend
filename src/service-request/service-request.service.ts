@@ -73,7 +73,6 @@ export class ServiceRequestService {
   }
 
   async update(id: number, updateDto: UpdateServiceRequestDto): Promise<ServiceRequest> {
-    // Find the service request
     const serviceRequest = await this.serviceRequestRepository.findOne({
       where: { id },
     });
@@ -82,13 +81,8 @@ export class ServiceRequestService {
       throw new NotFoundException('Service request not found');
     }
 
-    // Update only the provided fields
     Object.assign(serviceRequest, updateDto);
-
-    // Save the updated service request
-    const updatedRequest = await this.serviceRequestRepository.save(serviceRequest);
-
-    return updatedRequest;
+    return this.serviceRequestRepository.save(serviceRequest);
   }
 
   async remove(id: number): Promise<{ message: string }> {
