@@ -5,6 +5,7 @@ import { AuthModule } from './auth/auth.module';
 import { ServiceRequestModule } from './service-request/service-request.module';
 import { AdminModule } from './admin/admin.module';
 import { BillModule } from './bill/bill.module';
+import { InvoiceModule } from './bill/invoice/invoice.module';
 import { CorporateEnquiryModule } from './corporate-enquiry/corporate-enquiry.module';
 import { B2cEnquiryModule } from './b2c-enquiry/b2c-enquiry.module';
 import { SalesReportModule } from './sales-report/sales-report.module';
@@ -27,6 +28,7 @@ import { ScheduleModule } from '@nestjs/schedule';
     AuthModule,
     AdminModule,
     ServiceRequestModule,
+    InvoiceModule, // Must be before BillModule so /bill/invoice matches before /bill/:mobile
     BillModule,
     CorporateEnquiryModule,
     B2cEnquiryModule,
