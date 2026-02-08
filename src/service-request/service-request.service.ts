@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, Not, IsNull } from 'typeorm';
 import { ServiceRequest } from './service-request.entity';
 import { CreateServiceRequestDto } from './dto/create-service-request.dto';
 import { UpdateServiceRequestDto } from './dto/update-service-request.dto';
@@ -68,6 +68,24 @@ export class ServiceRequestService {
     return {
       success: true,
       message: 'Service requests fetched successfully',
+      count: serviceRequests.length,
+      data: serviceRequests,
+    };
+  }
+
+  /**
+   * Find all service requests that are assigned to staff.
+   */
+  async findAssigned() {
+    const serviceRequests = await this.serviceRequestRepository.find({
+      where: { assignedStaffId: Not(IsNull()) },
+      relations: ['assignedStaff'],
+      order: { createdAt: 'DESC' },
+    });
+
+    return {
+      success: true,
+      message: 'Assigned service requests fetched successfully',
       count: serviceRequests.length,
       data: serviceRequests,
     };

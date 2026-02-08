@@ -11,6 +11,7 @@ import { SalesReportModule } from './sales-report/sales-report.module';
 import { ModuleDefinitionModule } from './module/module.module';
 import { StoreModule } from './store/store.module';
 import { StaffModule } from './staff/staff.module';
+import { OrganizationModule } from './organization/organization.module';
 import { NotificationModule } from './notification/notification.module';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
@@ -33,6 +34,7 @@ import { ScheduleModule } from '@nestjs/schedule';
     ModuleDefinitionModule,
     StoreModule,
     StaffModule,
+    OrganizationModule,
     NotificationModule,
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],

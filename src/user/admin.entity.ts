@@ -29,6 +29,8 @@ export class Admin {
     default: 'ADMIN',
   })
   role: string;
-  
+
+  @Column({ name: 'store_id', type: 'int', nullable: true })
+  storeId: number | null;
 }
 

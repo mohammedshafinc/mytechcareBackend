@@ -37,6 +37,17 @@ export class ServiceRequestController {
     return this.serviceRequestService.findAll();
   }
 
+  @Get('assigned')
+  @RequireModule('CLIENTS')
+  @ApiOperation({ 
+    summary: 'Get assigned service requests', 
+    description: 'Fetch service requests that are assigned to staff, with staff details' 
+  })
+  @ApiResponse({ status: 200, description: 'Assigned service requests fetched successfully' })
+  findAssigned() {
+    return this.serviceRequestService.findAssigned();
+  }
+
   @Put(':id')
   @RequireModule('CLIENTS')
   @ApiOperation({ 
