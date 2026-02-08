@@ -6,6 +6,7 @@ import cookieParser from 'cookie-parser';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  console.log('🚀 Watchtower auto-deploy working');
 
   app.enableCors({
     origin: true,
