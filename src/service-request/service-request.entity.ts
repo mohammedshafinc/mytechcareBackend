@@ -1,4 +1,12 @@
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn } from 'typeorm';
+import {
+  Entity,
+  Column,
+  PrimaryGeneratedColumn,
+  CreateDateColumn,
+  ManyToOne,
+  JoinColumn,
+} from 'typeorm';
+import { Staff } from '../staff/staff.entity';
 
 @Entity('service_requests')
 export class ServiceRequest {
@@ -52,6 +60,13 @@ export class ServiceRequest {
     nullable: true 
   })
   status: string;
+
+  @Column({ name: 'assigned_staff_id', type: 'int', nullable: true })
+  assignedStaffId: number | null;
+
+  @ManyToOne(() => Staff, { onDelete: 'SET NULL', nullable: true })
+  @JoinColumn({ name: 'assigned_staff_id' })
+  assignedStaff: Staff | null;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

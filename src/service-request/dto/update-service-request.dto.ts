@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsOptional, IsString } from 'class-validator';
+import { IsOptional, IsString, IsInt, Min, ValidateIf } from 'class-validator';
 
 export class UpdateServiceRequestDto {
   @ApiProperty({
@@ -118,4 +118,16 @@ export class UpdateServiceRequestDto {
   @IsOptional()
   @IsString()
   status?: string;
+
+  @ApiProperty({
+    example: 1,
+    description: 'ID of staff assigned to this request. Use null to unassign.',
+    required: false,
+    nullable: true,
+  })
+  @IsOptional()
+  @ValidateIf((_, v) => v != null && v !== '')
+  @IsInt()
+  @Min(1)
+  assignedStaffId?: number | null;
 }

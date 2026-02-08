@@ -61,6 +61,7 @@ export class ServiceRequestService {
 
   async findAll() {
     const serviceRequests = await this.serviceRequestRepository.find({
+      relations: ['assignedStaff'],
       order: { createdAt: 'DESC' },
     });
 
@@ -82,7 +83,15 @@ export class ServiceRequestService {
     }
 
     Object.assign(serviceRequest, updateDto);
-    return this.serviceRequestRepository.save(serviceRequest);
+    await this.serviceRequestRepository.save(serviceRequest);
+
+    // Reload with assignedStaff relation so response includes name and empCode
+    const updated = await this.serviceRequestRepository.findOne({
+      where: { id },
+      relations: ['assignedStaff'],
+    });
+    if (!updated) throw new NotFoundException('Service request not found');
+    return updated;
   }
 
   async remove(id: number): Promise<{ message: string }> {
