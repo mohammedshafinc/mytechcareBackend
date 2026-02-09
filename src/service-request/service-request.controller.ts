@@ -3,6 +3,7 @@ import { AuthGuard } from '@nestjs/passport';
 import { ApiBearerAuth, ApiBody, ApiOperation, ApiResponse, ApiTags, ApiParam } from '@nestjs/swagger';
 import { ServiceRequestService } from './service-request.service';
 import { CreateServiceRequestDto } from './dto/create-service-request.dto';
+import { CreateServiceRequestManualDto } from './dto/create-service-request-manual.dto';
 import { UpdateServiceRequestDto } from './dto/update-service-request.dto';
 import { ModuleGuard } from '../auth/guards/module.guard';
 import { RequireModule } from '../auth/decorators/require-module.decorator';
@@ -24,6 +25,19 @@ export class ServiceRequestController {
   @ApiResponse({ status: 400, description: 'Invalid input data' })
   create(@Body() createServiceRequestDto: CreateServiceRequestDto) {
     return this.serviceRequestService.create(createServiceRequestDto);
+  }
+
+  @Post('manual')
+  @RequireModule('CLIENTS')
+  @ApiOperation({ 
+    summary: 'Create service request manually (admin)', 
+    description: 'Create a service request from admin with minimal required fields. Date/time and optional staff assignment use defaults.' 
+  })
+  @ApiBody({ type: CreateServiceRequestManualDto })
+  @ApiResponse({ status: 201, description: 'Service request created successfully' })
+  @ApiResponse({ status: 400, description: 'Invalid input data' })
+  createManual(@Body() dto: CreateServiceRequestManualDto) {
+    return this.serviceRequestService.createManual(dto);
   }
 
   @Get()

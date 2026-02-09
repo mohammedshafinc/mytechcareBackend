@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Not, IsNull } from 'typeorm';
 import { ServiceRequest } from './service-request.entity';
 import { CreateServiceRequestDto } from './dto/create-service-request.dto';
+import { CreateServiceRequestManualDto } from './dto/create-service-request-manual.dto';
 import { UpdateServiceRequestDto } from './dto/update-service-request.dto';
 import { AdminGateway } from '../admin/admin.gateway';
 
@@ -54,6 +55,68 @@ export class ServiceRequestService {
         description: savedRequest.description,
         status: savedRequest.status,
         timestamp: savedRequest.timestamp,
+        createdAt: savedRequest.createdAt,
+      },
+    };
+  }
+
+  /**
+   * Create a service request manually from admin (with defaults for date/time and optional staff assignment).
+   */
+  async createManual(dto: CreateServiceRequestManualDto) {
+    const now = new Date();
+    const dateTimeStr =
+      now.toLocaleDateString('en-GB', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+      }) +
+      ', ' +
+      now.toLocaleTimeString('en-US', { hour12: true });
+
+    const serviceRequest = this.serviceRequestRepository.create({
+      name: dto.name,
+      mobile: dto.mobile,
+      device: dto.device,
+      deviceDisplayName: dto.deviceDisplayName ?? dto.device,
+      otherDevice: dto.otherDevice ?? null,
+      locationType: dto.locationType ?? 'manual',
+      location: dto.location,
+      currentLocation: dto.currentLocation ?? null,
+      manualLocation: dto.manualLocation ?? dto.location,
+      description: dto.description ?? null,
+      language: dto.language ?? 'en',
+      dateTime: dateTimeStr,
+      timestamp: now,
+      status: dto.status ?? 'Request received',
+      assignedStaffId: dto.assignedStaffId ?? null,
+    });
+
+    const savedRequest = await this.serviceRequestRepository.save(serviceRequest);
+
+    this.adminGateway.notifyNewRequest({
+      id: savedRequest.id,
+      name: savedRequest.name,
+      createdAt: savedRequest.createdAt,
+    });
+
+    return {
+      success: true,
+      message: 'Service request created successfully (manual)',
+      data: {
+        id: savedRequest.id,
+        name: savedRequest.name,
+        mobile: savedRequest.mobile,
+        device: savedRequest.device,
+        deviceDisplayName: savedRequest.deviceDisplayName,
+        location: savedRequest.location,
+        description: savedRequest.description,
+        status: savedRequest.status,
+        timestamp: savedRequest.timestamp,
+        assignedStaffId: savedRequest.assignedStaffId,
         createdAt: savedRequest.createdAt,
       },
     };
