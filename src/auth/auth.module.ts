@@ -9,6 +9,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { JwtStrategy } from './jwt.strategy';
 import { ModuleGuard } from './guards/module.guard';
+import { ViewOnlyGuard } from './guards/view-only.guard';
 
 @Module({
   imports: [
@@ -20,7 +21,7 @@ import { ModuleGuard } from './guards/module.guard';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy, ModuleGuard],
-  exports: [AuthService, PassportModule, ModuleGuard],
+  providers: [AuthService, JwtStrategy, ModuleGuard, ViewOnlyGuard],
+  exports: [AuthService, PassportModule, ModuleGuard, ViewOnlyGuard],
 })
 export class AuthModule {}

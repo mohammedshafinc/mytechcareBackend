@@ -51,4 +51,13 @@ export class UpdateAdminUserDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+
+  @ApiProperty({
+    example: false,
+    description: 'Whether the user has view-only access (cannot edit, delete, or create)',
+    required: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  viewOnly?: boolean;
 }

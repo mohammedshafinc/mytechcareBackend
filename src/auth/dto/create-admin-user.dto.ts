@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsEmail, IsIn, IsNotEmpty, IsOptional, IsString, MinLength } from 'class-validator';
+import { IsEmail, IsIn, IsNotEmpty, IsOptional, IsString, MinLength ,IsBoolean} from 'class-validator';
 
 export const ADMIN_ROLES = ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'SUPPORT', 'VIEWER'] as const;
 export type AdminRole = (typeof ADMIN_ROLES)[number];
@@ -40,4 +40,12 @@ export class CreateAdminUserDto {
   @IsOptional()
   @IsString()
   name?: string;
+  @ApiProperty({
+    example: false,
+    description: 'Read-only access (cannot create/update/delete)',
+    required: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  viewOnly?: boolean;
 }

@@ -32,5 +32,8 @@ export class Admin {
 
   @Column({ name: 'store_id', type: 'int', nullable: true })
   storeId: number | null;
+
+  @Column({ name: 'view_only', default: false })
+  viewOnly: boolean;
 }
 

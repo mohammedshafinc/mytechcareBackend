@@ -15,6 +15,7 @@ export type RequestUser = {
   email?: string;
   role?: string;
   modules?: string[];
+  viewOnly?: boolean;
 };
 
 @Injectable()

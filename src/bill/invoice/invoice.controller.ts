@@ -24,6 +24,7 @@ import { InvoiceService } from './invoice.service';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { UpdateInvoiceDto } from './dto/update-invoice.dto';
 import { ModuleGuard } from '../../auth/guards/module.guard';
+import { ViewOnlyGuard } from '../../auth/guards/view-only.guard';
 import { RequireModule } from '../../auth/decorators/require-module.decorator';
 
 @ApiTags('Invoice')
@@ -35,6 +36,7 @@ export class InvoiceController {
   constructor(private readonly invoiceService: InvoiceService) {}
 
   @Post()
+  @UseGuards(ViewOnlyGuard)
   @ApiOperation({
     summary: 'Create invoice',
     description: 'Create a new invoice directly with customer info and line items',
@@ -103,6 +105,7 @@ export class InvoiceController {
   }
 
   @Put(':id')
+  @UseGuards(ViewOnlyGuard)
   @ApiOperation({
     summary: 'Update invoice',
     description: 'Update an existing invoice. If items are provided, all existing items are replaced.',
@@ -119,6 +122,7 @@ export class InvoiceController {
   }
 
   @Delete(':id')
+  @UseGuards(ViewOnlyGuard)
   @ApiOperation({
     summary: 'Delete invoice',
     description: 'Delete an invoice and all its line items',

@@ -94,6 +94,7 @@ export class AuthService {
       isActive: boolean;
       modules: string[];
       hasCustomModules: boolean;
+      viewOnly: boolean;
     }>;
     allModules: { code: string; name: string | null }[];
   }> {
@@ -131,6 +132,7 @@ export class AuthService {
           isActive: admin.isActive,
           modules,
           hasCustomModules,
+          viewOnly: admin.viewOnly ?? false,
         };
       }),
     );
@@ -227,7 +229,7 @@ export class AuthService {
 
   /**
    * Loads admin by id, resolves modules for their role, and returns
-   * { id, email, name, role, modules }. Throws if admin not found.
+   * { id, email, name, role, modules, viewOnly }. Throws if admin not found.
    */
   async getAdminMe(userId: number): Promise<{
     id: number;
@@ -235,6 +237,7 @@ export class AuthService {
     name: string | null;
     role: string;
     modules: string[];
+    viewOnly: boolean;
   }> {
     const admin = await this.adminRepository.findOne({ where: { id: userId } });
     if (!admin) {
@@ -247,6 +250,7 @@ export class AuthService {
       name: admin.name ?? null,
       role: admin.role ?? 'SUPER_ADMIN',
       modules,
+      viewOnly: admin.viewOnly ?? false,
     };
   }
 
@@ -351,6 +355,7 @@ export class AuthService {
       email: admin.email,
       role,
       modules,
+      viewOnly: admin.viewOnly ?? false,
     };
 
     const accessToken = this.jwtService.sign(payload, {
@@ -385,7 +390,7 @@ export class AuthService {
     try {
       const decoded = this.jwtService.verify(refreshToken, {
         secret: process.env.JWT_REFRESH_SECRET,
-      }) as { sub: number; email?: string; role?: string; modules?: string[] };
+      }) as { sub: number; email?: string; role?: string; modules?: string[]; viewOnly?: boolean };
 
       if (
         typeof decoded !== 'object' ||
@@ -395,6 +400,11 @@ export class AuthService {
         throw new UnauthorizedException('Invalid refresh token');
       }
 
+      const admin = await this.adminRepository.findOne({ where: { id: decoded.sub } });
+      if (!admin) {
+        throw new UnauthorizedException('Admin not found');
+      }
+
       const modules = await this.getModulesForUser(decoded.sub);
       const role = decoded.role ?? 'SUPER_ADMIN';
       const payload = {
@@ -402,6 +412,7 @@ export class AuthService {
         email: decoded.email,
         role,
         modules,
+        viewOnly: admin.viewOnly ?? false,
       };
 
       const accessToken = this.jwtService.sign(payload, {
@@ -430,6 +441,7 @@ export class AuthService {
       email: admin.email,
       role: admin.role,
       isActive: admin.isActive,
+      viewOnly: admin.viewOnly ?? false,
       createdAt: admin.createdAt,
       lastLoginAt: admin.lastLoginAt,
     }));
@@ -463,6 +475,7 @@ export class AuthService {
       role: dto.role,
       ...(dto.name != null && dto.name !== '' && { name: dto.name }),
       isActive: true,
+      viewOnly: dto.viewOnly ?? false,
     });
 
     const saved = await this.adminRepository.save(admin);
@@ -473,6 +486,7 @@ export class AuthService {
       admin: {
         id: saved.id,
         email: saved.email,
+        viewOnly: saved.viewOnly,
         name: saved.name,
         role: saved.role,
         isActive: saved.isActive,
@@ -520,6 +534,10 @@ export class AuthService {
       admin.isActive = dto.isActive;
     }
 
+    if (dto.viewOnly !== undefined) {
+      admin.viewOnly = dto.viewOnly;
+    }
+
     const saved = await this.adminRepository.save(admin);
 
     return {
@@ -531,6 +549,7 @@ export class AuthService {
         name: saved.name,
         role: saved.role,
         isActive: saved.isActive,
+        viewOnly: saved.viewOnly ?? false,
         createdAt: saved.createdAt,
         lastLoginAt: saved.lastLoginAt,
       },

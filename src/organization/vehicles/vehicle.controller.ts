@@ -22,6 +22,7 @@ import {
   ApiQuery,
 } from '@nestjs/swagger';
 import { ModuleGuard } from '../../auth/guards/module.guard';
+import { ViewOnlyGuard } from '../../auth/guards/view-only.guard';
 import { RequireModule } from '../../auth/decorators/require-module.decorator';
 import { VehicleService } from './vehicle.service';
 import { RequestUser } from './vehicle.service';
@@ -65,6 +66,7 @@ export class VehicleController {
   }
 
   @Post()
+  @UseGuards(ViewOnlyGuard)
   @ApiOperation({ summary: 'Create vehicle', description: 'Create a new vehicle' })
   @ApiBody({ type: CreateVehicleDto })
   @ApiResponse({ status: 201, description: 'Vehicle created successfully' })
@@ -84,6 +86,7 @@ export class VehicleController {
   }
 
   @Put('expenses/:expenseId')
+  @UseGuards(ViewOnlyGuard)
   @ApiOperation({ summary: 'Update expense', description: 'Update an expense by ID' })
   @ApiParam({ name: 'expenseId', type: Number, description: 'Expense ID' })
   @ApiBody({ type: UpdateVehicleExpenseDto })
@@ -100,6 +103,7 @@ export class VehicleController {
   }
 
   @Delete('expenses/:expenseId')
+  @UseGuards(ViewOnlyGuard)
   @ApiOperation({ summary: 'Delete expense (admin only, soft)', description: 'Soft delete an expense (Super Admin only)' })
   @ApiParam({ name: 'expenseId', type: Number, description: 'Expense ID' })
   @ApiResponse({ status: 200, description: 'Expense deleted successfully' })
@@ -139,6 +143,7 @@ export class VehicleController {
   }
 
   @Put(':id')
+  @UseGuards(ViewOnlyGuard)
   @ApiOperation({ summary: 'Update vehicle', description: 'Update an existing vehicle' })
   @ApiParam({ name: 'id', type: Number, description: 'Vehicle ID' })
   @ApiBody({ type: UpdateVehicleDto })
@@ -156,6 +161,7 @@ export class VehicleController {
   }
 
   @Delete(':id')
+  @UseGuards(ViewOnlyGuard)
   @ApiOperation({ summary: 'Delete vehicle (soft)', description: 'Soft delete a vehicle' })
   @ApiParam({ name: 'id', type: Number, description: 'Vehicle ID' })
   @ApiResponse({ status: 200, description: 'Vehicle deleted successfully' })
@@ -169,6 +175,7 @@ export class VehicleController {
   }
 
   @Post(':id/expenses')
+  @UseGuards(ViewOnlyGuard)
   @ApiOperation({ summary: 'Add expense', description: 'Add an expense to a vehicle (only ACTIVE vehicles)' })
   @ApiParam({ name: 'id', type: Number, description: 'Vehicle ID' })
   @ApiBody({ type: CreateVehicleExpenseDto })

@@ -9,6 +9,7 @@ import { UpdateAdminUserDto } from './dto/update-admin-user.dto';
 import { BlockLoginDto } from './dto/block-login.dto';
 import { UpdateUserModulesDto } from './dto/update-user-modules.dto';
 import { ModuleGuard } from './guards/module.guard';
+import { ViewOnlyGuard } from './guards/view-only.guard';
 import { RequireModule } from './decorators/require-module.decorator';
 import type { Request } from 'express';
 import type { Response } from 'express';
@@ -151,7 +152,7 @@ export class AuthController {
   }
 
   @Post('admin/users/modules')
-  @UseGuards(AuthGuard('jwt'), ModuleGuard)
+  @UseGuards(AuthGuard('jwt'), ModuleGuard, ViewOnlyGuard)
   @RequireModule('AUTH')
   @ApiBearerAuth()
   @ApiOperation({
@@ -179,7 +180,7 @@ export class AuthController {
   }
 
   @Post('admin/users/:userId/reset-modules')
-  @UseGuards(AuthGuard('jwt'), ModuleGuard)
+  @UseGuards(AuthGuard('jwt'), ModuleGuard, ViewOnlyGuard)
   @RequireModule('AUTH')
   @ApiBearerAuth()
   @ApiOperation({
@@ -197,7 +198,7 @@ export class AuthController {
   }
 
   @Post('admin/users')
-  @UseGuards(AuthGuard('jwt'), ModuleGuard)
+  @UseGuards(AuthGuard('jwt'), ModuleGuard, ViewOnlyGuard)
   @RequireModule('AUTH')
   @ApiBearerAuth()
   @ApiOperation({
@@ -215,13 +216,13 @@ export class AuthController {
   }
 
   @Patch('admin/users/:userId')
-  @UseGuards(AuthGuard('jwt'), ModuleGuard)
+  @UseGuards(AuthGuard('jwt'), ModuleGuard, ViewOnlyGuard)
   @RequireModule('AUTH')
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Edit admin user',
     description:
-      'Update an existing admin user. Provide only the fields you want to change (email, password, role, name, isActive).',
+      'Update an existing admin user. Provide only the fields you want to change (email, password, role, name, isActive, viewOnly).',
   })
   @ApiBody({ type: UpdateAdminUserDto })
   @ApiResponse({ status: 200, description: 'Admin user updated successfully' })
@@ -237,7 +238,7 @@ export class AuthController {
   }
 
   @Patch('admin/users/:userId/block-login')
-  @UseGuards(AuthGuard('jwt'), ModuleGuard)
+  @UseGuards(AuthGuard('jwt'), ModuleGuard, ViewOnlyGuard)
   @RequireModule('AUTH')
   @ApiBearerAuth()
   @ApiOperation({
@@ -258,7 +259,7 @@ export class AuthController {
   }
 
   @Delete('admin/users/:userId')
-  @UseGuards(AuthGuard('jwt'), ModuleGuard)
+  @UseGuards(AuthGuard('jwt'), ModuleGuard, ViewOnlyGuard)
   @RequireModule('AUTH')
   @ApiBearerAuth()
   @ApiOperation({

@@ -4,6 +4,7 @@ import { ApiBearerAuth, ApiBody, ApiOperation, ApiParam, ApiResponse, ApiTags } 
 import { BillService } from './bill.service';
 import { CreateBillDto } from './dto/create-bill.dto';
 import { ModuleGuard } from '../auth/guards/module.guard';
+import { ViewOnlyGuard } from '../auth/guards/view-only.guard';
 import { RequireModule } from '../auth/decorators/require-module.decorator';
 
 @ApiTags('Bill')
@@ -31,6 +32,7 @@ export class BillController {
   }
 
   @Post()
+  @UseGuards(ViewOnlyGuard)
   @ApiOperation({ 
     summary: 'Create bill', 
     description: 'Create a new bill for a service request' 

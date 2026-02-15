@@ -6,6 +6,7 @@ import { CreateServiceRequestDto } from './dto/create-service-request.dto';
 import { CreateServiceRequestManualDto } from './dto/create-service-request-manual.dto';
 import { UpdateServiceRequestDto } from './dto/update-service-request.dto';
 import { ModuleGuard } from '../auth/guards/module.guard';
+import { ViewOnlyGuard } from '../auth/guards/view-only.guard';
 import { RequireModule } from '../auth/decorators/require-module.decorator';
 
 @ApiTags('Service Request')
@@ -16,6 +17,7 @@ export class ServiceRequestController {
   constructor(private readonly serviceRequestService: ServiceRequestService) {}
 
   @Post()
+  @UseGuards(ViewOnlyGuard)
   @ApiOperation({ 
     summary: 'Create service request', 
     description: 'Create a new service request from frontend' 
@@ -28,6 +30,7 @@ export class ServiceRequestController {
   }
 
   @Post('manual')
+  @UseGuards(ViewOnlyGuard)
   @RequireModule('CLIENTS')
   @ApiOperation({ 
     summary: 'Create service request manually (admin)', 
@@ -63,6 +66,7 @@ export class ServiceRequestController {
   }
 
   @Put(':id')
+  @UseGuards(ViewOnlyGuard)
   @RequireModule('CLIENTS')
   @ApiOperation({ 
     summary: 'Update service request', 
@@ -91,6 +95,7 @@ export class ServiceRequestController {
   }
 
   @Delete(':id')
+  @UseGuards(ViewOnlyGuard)
   @RequireModule('CLIENTS')
   @ApiOperation({
     summary: 'Delete service request',

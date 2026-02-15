@@ -5,6 +5,7 @@ import { CorporateEnquiryService } from './corporate-enquiry.service';
 import { CreateCorporateEnquiryDto } from './dto/create-corporate-enquiry.dto';
 import { UpdateCorporateEnquiryDto } from './dto/update-corporate-enquiry.dto';
 import { ModuleGuard } from '../auth/guards/module.guard';
+import { ViewOnlyGuard } from '../auth/guards/view-only.guard';
 import { RequireModule } from '../auth/decorators/require-module.decorator';
 
 @ApiTags('Corporate Enquiry')
@@ -38,6 +39,7 @@ export class CorporateEnquiryController {
   }
 
   @Post()
+  @UseGuards(ViewOnlyGuard)
   @ApiOperation({
     summary: 'Create corporate enquiry',
     description: 'Create a new corporate enquiry with corporate name, enquired date, requirement, and additional notes',
@@ -51,6 +53,7 @@ export class CorporateEnquiryController {
   }
 
   @Put(':id')
+  @UseGuards(ViewOnlyGuard)
   @ApiOperation({
     summary: 'Update corporate enquiry',
     description: 'Update an existing corporate enquiry by ID',

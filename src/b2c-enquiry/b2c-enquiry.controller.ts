@@ -5,6 +5,7 @@ import { B2cEnquiryService } from './b2c-enquiry.service';
 import { CreateB2cEnquiryDto } from './dto/create-b2c-enquiry.dto';
 import { UpdateB2cEnquiryDto } from './dto/update-b2c-enquiry.dto';
 import { ModuleGuard } from '../auth/guards/module.guard';
+import { ViewOnlyGuard } from '../auth/guards/view-only.guard';
 import { RequireModule } from '../auth/decorators/require-module.decorator';
 
 @ApiTags('B2C Enquiry')
@@ -27,6 +28,7 @@ export class B2cEnquiryController {
   }
 
   @Post()
+  @UseGuards(ViewOnlyGuard)
   @ApiOperation({
     summary: 'Create B2C enquiry',
     description: 'Create a new B2C enquiry with customer name, enquired date, requirement, and additional notes',
@@ -40,6 +42,7 @@ export class B2cEnquiryController {
   }
 
   @Put(':id')
+  @UseGuards(ViewOnlyGuard)
   @ApiOperation({
     summary: 'Update B2C enquiry',
     description: 'Update an existing B2C enquiry by ID',

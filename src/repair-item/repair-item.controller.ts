@@ -4,6 +4,7 @@ import { ApiBearerAuth, ApiBody, ApiOperation, ApiResponse, ApiTags } from '@nes
 import { BillService } from '../bill/bill.service';
 import { CreateBillDto } from '../bill/dto/create-bill.dto';
 import { ModuleGuard } from '../auth/guards/module.guard';
+import { ViewOnlyGuard } from '../auth/guards/view-only.guard';
 import { RequireModule } from '../auth/decorators/require-module.decorator';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
@@ -19,6 +20,7 @@ export class RepairItemController {
   ) {}
 
   @Post('bill')
+  @UseGuards(ViewOnlyGuard)
   @ApiOperation({ 
     summary: 'Create bill', 
     description: 'Create a new bill for a service request' 
