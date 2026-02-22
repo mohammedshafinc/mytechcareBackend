@@ -86,6 +86,21 @@ export class AuthController {
     return rest;
   }
 
+  @Post('logout')
+  @ApiOperation({ summary: 'Logout', description: 'Clears the refresh token cookie. Client should discard the access token.' })
+  @ApiResponse({ status: 200, description: 'Logged out successfully' })
+  async logout(@Res({ passthrough: true }) res: Response) {
+    const isProduction = process.env.NODE_ENV === 'production';
+    res.clearCookie('refreshToken', {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: isProduction ? 'none' : 'lax',
+      path: '/',
+      ...(isProduction && { domain: '.mtechcare.com' }),
+    });
+    return { message: 'Logged out successfully' };
+  }
+
   @Post('refresh')
   @ApiOperation({ summary: 'Refresh access token', description: 'Issue a new access token using refresh token cookie' })
   @ApiResponse({ status: 200, description: 'Access token refreshed' })
