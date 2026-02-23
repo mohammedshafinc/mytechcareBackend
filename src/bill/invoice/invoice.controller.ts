@@ -80,6 +80,19 @@ export class InvoiceController {
     return this.invoiceService.getNextInvoiceNumber();
   }
 
+  @Get('by-service-request/:serviceRequestId')
+  @ApiOperation({
+    summary: 'Get invoices by service request ID',
+    description: 'Fetch all invoices linked to a specific service request',
+  })
+  @ApiParam({ name: 'serviceRequestId', type: Number, description: 'Service Request ID' })
+  @ApiResponse({ status: 200, description: 'Invoices fetched successfully' })
+  async findByServiceRequest(
+    @Param('serviceRequestId', ParseIntPipe) serviceRequestId: number,
+  ) {
+    return this.invoiceService.findByServiceRequestId(serviceRequestId);
+  }
+
   @Get(':id')
   @ApiOperation({
     summary: 'Get invoice by ID',

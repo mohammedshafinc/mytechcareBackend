@@ -339,6 +339,24 @@ export class InvoiceService {
   }
 
   /**
+   * Find all invoices linked to a specific service request
+   */
+  async findByServiceRequestId(serviceRequestId: number) {
+    const invoices = await this.invoiceRepository.find({
+      where: { serviceRequestId },
+      relations: ['items'],
+      order: { createdAt: 'DESC' },
+    });
+
+    return {
+      success: true,
+      message: 'Invoices fetched successfully',
+      count: invoices.length,
+      data: invoices,
+    };
+  }
+
+  /**
    * Get the next invoice number (for form helpers)
    */
   async getNextInvoiceNumber() {
