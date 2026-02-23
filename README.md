@@ -59,8 +59,20 @@ $ npm run test:cov
 
 ## Deployment
 
+### Docker (production)
+
+To avoid stale builds (e.g. new controllers not appearing in Swagger), always rebuild with `--no-cache`:
+
+```bash
+docker build --no-cache -t mytechcare-backend .
+```
+
+Then run/restart the container. Verify new routes at `https://api.mtechcare.com/api/docs`.
+
+---
+
 When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
-dd
+
 If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
 
 ```bash
