@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Not, IsNull } from 'typeorm';
+import { v4 as uuidv4 } from 'uuid';
 import { ServiceRequest } from './service-request.entity';
 import { CreateServiceRequestDto } from './dto/create-service-request.dto';
 import { CreateServiceRequestManualDto } from './dto/create-service-request-manual.dto';
@@ -17,6 +18,8 @@ export class ServiceRequestService {
 
   async create(createServiceRequestDto: CreateServiceRequestDto) {
     const serviceRequest = this.serviceRequestRepository.create({
+      uuid: uuidv4(),
+      referenceNumber: `SR-TEMP-${uuidv4().slice(0, 8)}`,
       name: createServiceRequestDto.name,
       mobile: createServiceRequestDto.mobile,
       device: createServiceRequestDto.device,
@@ -35,6 +38,12 @@ export class ServiceRequestService {
 
     const savedRequest = await this.serviceRequestRepository.save(serviceRequest);
 
+    const realReferenceNumber = `SR-${new Date().getFullYear()}-${String(savedRequest.id).padStart(4, '0')}`;
+    if (savedRequest.referenceNumber?.startsWith('SR-TEMP-')) {
+      savedRequest.referenceNumber = realReferenceNumber;
+      await this.serviceRequestRepository.save(savedRequest);
+    }
+
     // 🔥 Notify admin instantly
     this.adminGateway.notifyNewRequest({
       id: savedRequest.id,
@@ -42,11 +51,14 @@ export class ServiceRequestService {
       createdAt: savedRequest.createdAt,
     });
 
+    const finalRequest = await this.serviceRequestRepository.findOne({ where: { id: savedRequest.id } });
     return {
       success: true,
       message: 'Service request created successfully',
       data: {
-        id: savedRequest.id,
+        id: finalRequest!.id,
+        uuid: finalRequest!.uuid,
+        referenceNumber: finalRequest!.referenceNumber,
         name: savedRequest.name,
         mobile: savedRequest.mobile,
         device: savedRequest.device,
@@ -78,6 +90,8 @@ export class ServiceRequestService {
       now.toLocaleTimeString('en-US', { hour12: true });
 
     const serviceRequest = this.serviceRequestRepository.create({
+      uuid: uuidv4(),
+      referenceNumber: `SR-TEMP-${uuidv4().slice(0, 8)}`,
       name: dto.name,
       mobile: dto.mobile,
       device: dto.device,
@@ -97,17 +111,26 @@ export class ServiceRequestService {
 
     const savedRequest = await this.serviceRequestRepository.save(serviceRequest);
 
+    const realReferenceNumber = `SR-${new Date().getFullYear()}-${String(savedRequest.id).padStart(4, '0')}`;
+    if (savedRequest.referenceNumber?.startsWith('SR-TEMP-')) {
+      savedRequest.referenceNumber = realReferenceNumber;
+      await this.serviceRequestRepository.save(savedRequest);
+    }
+
     this.adminGateway.notifyNewRequest({
       id: savedRequest.id,
       name: savedRequest.name,
       createdAt: savedRequest.createdAt,
     });
 
+    const finalRequest = await this.serviceRequestRepository.findOne({ where: { id: savedRequest.id } });
     return {
       success: true,
       message: 'Service request created successfully (manual)',
       data: {
-        id: savedRequest.id,
+        id: finalRequest!.id,
+        uuid: finalRequest!.uuid,
+        referenceNumber: finalRequest!.referenceNumber,
         name: savedRequest.name,
         mobile: savedRequest.mobile,
         device: savedRequest.device,
@@ -154,38 +177,41 @@ export class ServiceRequestService {
     };
   }
 
-  async update(id: number, updateDto: UpdateServiceRequestDto): Promise<ServiceRequest> {
-    const serviceRequest = await this.serviceRequestRepository.findOne({
-      where: { id },
-    });
-
-    if (!serviceRequest) {
-      throw new NotFoundException('Service request not found');
+  async findByUuidOrId(idOrUuid: string | number): Promise<ServiceRequest> {
+    if (typeof idOrUuid === 'number' || /^\d+$/.test(String(idOrUuid))) {
+      const byId = await this.serviceRequestRepository.findOne({ where: { id: Number(idOrUuid) } });
+      if (byId) return byId;
     }
+    const byUuid = await this.serviceRequestRepository.findOne({ where: { uuid: String(idOrUuid) } });
+    if (!byUuid) throw new NotFoundException('Service request not found');
+    return byUuid;
+  }
 
+  async findOne(idOrUuid: string | number): Promise<ServiceRequest> {
+    const serviceRequest = await this.findByUuidOrId(idOrUuid);
+    const withRelations = await this.serviceRequestRepository.findOne({
+      where: { id: serviceRequest.id },
+      relations: ['assignedStaff'],
+    });
+    if (!withRelations) throw new NotFoundException('Service request not found');
+    return withRelations;
+  }
+
+  async update(idOrUuid: string | number, updateDto: UpdateServiceRequestDto): Promise<ServiceRequest> {
+    const serviceRequest = await this.findByUuidOrId(idOrUuid);
     Object.assign(serviceRequest, updateDto);
     await this.serviceRequestRepository.save(serviceRequest);
-
-    // Reload with assignedStaff relation so response includes name and empCode
     const updated = await this.serviceRequestRepository.findOne({
-      where: { id },
+      where: { id: serviceRequest.id },
       relations: ['assignedStaff'],
     });
     if (!updated) throw new NotFoundException('Service request not found');
     return updated;
   }
 
-  async remove(id: number): Promise<{ message: string }> {
-    const serviceRequest = await this.serviceRequestRepository.findOne({
-      where: { id },
-    });
-
-    if (!serviceRequest) {
-      throw new NotFoundException('Service request not found');
-    }
-
+  async remove(idOrUuid: string | number): Promise<{ message: string }> {
+    const serviceRequest = await this.findByUuidOrId(idOrUuid);
     await this.serviceRequestRepository.remove(serviceRequest);
-
     return { message: 'Service request deleted successfully' };
   }
 

@@ -13,6 +13,12 @@ export class ServiceRequest {
   @PrimaryGeneratedColumn()
   id: number;
 
+  @Column({ type: 'varchar', length: 36, unique: true })
+  uuid: string;
+
+  @Column({ name: 'reference_number', type: 'varchar', length: 50, unique: true })
+  referenceNumber: string;
+
   @Column()
   name: string;
 

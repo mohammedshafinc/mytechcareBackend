@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Post, Put, Param, ParseIntPipe, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Post, Put, Param, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { ApiBearerAuth, ApiBody, ApiOperation, ApiResponse, ApiTags, ApiParam } from '@nestjs/swagger';
 import { ServiceRequestService } from './service-request.service';
@@ -65,6 +65,23 @@ export class ServiceRequestController {
     return this.serviceRequestService.findAssigned();
   }
 
+  @Get(':id')
+  @RequireModule('CLIENTS')
+  @ApiOperation({
+    summary: 'Get service request by ID or UUID',
+    description: 'Fetch a single service request by numeric ID or UUID for detail page',
+  })
+  @ApiParam({ name: 'id', description: 'Service request ID (number) or UUID' })
+  @ApiResponse({ status: 200, description: 'Service request fetched successfully' })
+  @ApiResponse({ status: 404, description: 'Service request not found' })
+  async findOne(@Param('id') id: string) {
+    const serviceRequest = await this.serviceRequestService.findOne(id);
+    return {
+      success: true,
+      data: serviceRequest,
+    };
+  }
+
   @Put(':id')
   @UseGuards(ViewOnlyGuard)
   @RequireModule('CLIENTS')
@@ -74,15 +91,14 @@ export class ServiceRequestController {
   })
   @ApiParam({ 
     name: 'id', 
-    type: Number, 
-    description: 'Service request ID' 
+    description: 'Service request ID (number) or UUID' 
   })
   @ApiBody({ type: UpdateServiceRequestDto })
   @ApiResponse({ status: 200, description: 'Service request updated successfully' })
   @ApiResponse({ status: 404, description: 'Service request not found' })
   @ApiResponse({ status: 400, description: 'Invalid input data' })
   async update(
-    @Param('id', ParseIntPipe) id: number,
+    @Param('id') id: string,
     @Body() updateDto: UpdateServiceRequestDto,
   ) {
     const updatedRequest = await this.serviceRequestService.update(id, updateDto);
@@ -103,12 +119,11 @@ export class ServiceRequestController {
   })
   @ApiParam({
     name: 'id',
-    type: Number,
-    description: 'Service request ID',
+    description: 'Service request ID (number) or UUID',
   })
   @ApiResponse({ status: 200, description: 'Service request deleted successfully' })
   @ApiResponse({ status: 404, description: 'Service request not found' })
-  async remove(@Param('id', ParseIntPipe) id: number) {
+  async remove(@Param('id') id: string) {
     return this.serviceRequestService.remove(id);
   }
 }
