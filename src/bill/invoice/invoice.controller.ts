@@ -105,18 +105,6 @@ export class InvoiceController {
     return this.invoiceService.findOne(id);
   }
 
-  @Get('number/:invoiceNumber')
-  @ApiOperation({
-    summary: 'Get invoice by invoice number',
-    description: 'Fetch invoice by its invoice number (e.g., INV-0001)',
-  })
-  @ApiParam({ name: 'invoiceNumber', type: String, description: 'Invoice number' })
-  @ApiResponse({ status: 200, description: 'Invoice fetched successfully' })
-  @ApiResponse({ status: 404, description: 'Invoice not found' })
-  async findByInvoiceNumber(@Param('invoiceNumber') invoiceNumber: string) {
-    return this.invoiceService.findByInvoiceNumber(invoiceNumber);
-  }
-
   @Put(':id')
   @UseGuards(ViewOnlyGuard)
   @ApiOperation({

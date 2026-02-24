@@ -1,8 +1,10 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Not, IsNull } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
 import { ServiceRequest } from './service-request.entity';
+import { Bill } from '../bill/bill.entity';
+import { Invoice } from '../bill/invoice/invoice.entity';
 import { CreateServiceRequestDto } from './dto/create-service-request.dto';
 import { CreateServiceRequestManualDto } from './dto/create-service-request-manual.dto';
 import { UpdateServiceRequestDto } from './dto/update-service-request.dto';
@@ -13,6 +15,10 @@ export class ServiceRequestService {
   constructor(
     @InjectRepository(ServiceRequest)
     private serviceRequestRepository: Repository<ServiceRequest>,
+    @InjectRepository(Bill)
+    private billRepository: Repository<Bill>,
+    @InjectRepository(Invoice)
+    private invoiceRepository: Repository<Invoice>,
     private readonly adminGateway: AdminGateway,
   ) {}
 
@@ -209,8 +215,32 @@ export class ServiceRequestService {
     return updated;
   }
 
-  async remove(idOrUuid: string | number): Promise<{ message: string }> {
+  async remove(
+    idOrUuid: string | number,
+    options?: { force?: boolean },
+  ): Promise<{ message: string }> {
     const serviceRequest = await this.findByUuidOrId(idOrUuid);
+    const billCount = await this.billRepository.count({
+      where: { userId: serviceRequest.id },
+    });
+
+    if (billCount > 0 && !options?.force) {
+      throw new ConflictException({
+        statusCode: 409,
+        code: 'HAS_BILLS',
+        message: `This service request has ${billCount} bill(s) linked. Confirm delete to remove the service request and its bills.`,
+        billCount,
+      });
+    }
+
+    if (options?.force && billCount > 0) {
+      await this.billRepository.delete({ userId: serviceRequest.id });
+      await this.invoiceRepository.update(
+        { serviceRequestId: serviceRequest.id },
+        { serviceRequestId: null },
+      );
+    }
+
     await this.serviceRequestRepository.remove(serviceRequest);
     return { message: 'Service request deleted successfully' };
   }

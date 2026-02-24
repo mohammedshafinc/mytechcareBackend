@@ -198,26 +198,6 @@ export class InvoiceService {
   }
 
   /**
-   * Get invoice by invoice number
-   */
-  async findByInvoiceNumber(invoiceNumber: string) {
-    const invoice = await this.invoiceRepository.findOne({
-      where: { invoiceNumber },
-      relations: ['items'],
-    });
-
-    if (!invoice) {
-      throw new NotFoundException(`Invoice ${invoiceNumber} not found`);
-    }
-
-    return {
-      success: true,
-      message: 'Invoice fetched successfully',
-      data: invoice,
-    };
-  }
-
-  /**
    * Update an invoice
    */
   async update(id: number, updateInvoiceDto: UpdateInvoiceDto) {
