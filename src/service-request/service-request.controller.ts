@@ -123,9 +123,8 @@ export class ServiceRequestController {
   })
   @ApiResponse({ status: 200, description: 'Service request deleted successfully' })
   @ApiResponse({ status: 404, description: 'Service request not found' })
-  @ApiResponse({ status: 409, description: 'Service request has linked bills; use ?force=true to confirm' })
-  async remove(@Param('id') id: string, @Query('force') force?: string) {
-    return this.serviceRequestService.remove(id, { force: force === 'true' });
+  async remove(@Param('id') id: string) {
+    return this.serviceRequestService.remove(id);
   }
 }
 

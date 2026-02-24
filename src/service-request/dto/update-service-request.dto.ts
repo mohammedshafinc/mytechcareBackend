@@ -2,6 +2,17 @@ import { ApiProperty } from '@nestjs/swagger';
 import { IsOptional, IsString, IsInt, Min, ValidateIf } from 'class-validator';
 
 export class UpdateServiceRequestDto {
+  /** UUID and referenceNumber are accepted from the client but never updated. */
+  @ApiProperty({ description: 'Read-only; ignored on update', required: false })
+  @IsOptional()
+  @IsString()
+  uuid?: string;
+
+  @ApiProperty({ description: 'Read-only; ignored on update', required: false })
+  @IsOptional()
+  @IsString()
+  referenceNumber?: string;
+
   @ApiProperty({
     example: 'John Doe',
     description: 'Customer name',
