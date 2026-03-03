@@ -130,4 +130,21 @@ export class CorporateEnquiryService {
       data: updatedEnquiry,
     };
   }
+
+  async remove(id: number) {
+    const corporateEnquiry = await this.corporateEnquiryRepository.findOne({
+      where: { id },
+    });
+
+    if (!corporateEnquiry) {
+      throw new NotFoundException('Corporate enquiry not found');
+    }
+
+    await this.corporateEnquiryRepository.remove(corporateEnquiry);
+
+    return {
+      success: true,
+      message: 'Corporate enquiry deleted successfully',
+    };
+  }
 }

@@ -90,4 +90,21 @@ export class B2cEnquiryService {
       data: updatedEnquiry,
     };
   }
+
+  async remove(id: number) {
+    const b2cEnquiry = await this.b2cEnquiryRepository.findOne({
+      where: { id },
+    });
+
+    if (!b2cEnquiry) {
+      throw new NotFoundException('B2C enquiry not found');
+    }
+
+    await this.b2cEnquiryRepository.remove(b2cEnquiry);
+
+    return {
+      success: true,
+      message: 'B2C enquiry deleted successfully',
+    };
+  }
 }

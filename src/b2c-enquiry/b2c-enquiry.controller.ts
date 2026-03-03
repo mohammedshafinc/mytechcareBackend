@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Put, Body, Param, ParseIntPipe, UseGuards } from '@nestjs/common';
+import { Controller, Post, Get, Put, Delete, Body, Param, ParseIntPipe, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { ApiTags, ApiOperation, ApiBody, ApiResponse, ApiBearerAuth, ApiParam } from '@nestjs/swagger';
 import { B2cEnquiryService } from './b2c-enquiry.service';
@@ -62,5 +62,23 @@ export class B2cEnquiryController {
     @Body() updateB2cEnquiryDto: UpdateB2cEnquiryDto,
   ) {
     return this.b2cEnquiryService.update(id, updateB2cEnquiryDto);
+  }
+
+  @Delete(':id')
+  @UseGuards(ViewOnlyGuard)
+  @ApiOperation({
+    summary: 'Delete B2C enquiry',
+    description: 'Delete an existing B2C enquiry by ID',
+  })
+  @ApiParam({
+    name: 'id',
+    type: Number,
+    description: 'B2C enquiry ID',
+  })
+  @ApiResponse({ status: 200, description: 'B2C enquiry deleted successfully' })
+  @ApiResponse({ status: 404, description: 'B2C enquiry not found' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async remove(@Param('id', ParseIntPipe) id: number) {
+    return this.b2cEnquiryService.remove(id);
   }
 }

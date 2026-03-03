@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Put, Body, Param, ParseIntPipe, UseGuards } from '@nestjs/common';
+import { Controller, Post, Get, Put, Delete, Body, Param, ParseIntPipe, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { ApiTags, ApiOperation, ApiBody, ApiResponse, ApiBearerAuth, ApiParam } from '@nestjs/swagger';
 import { CorporateEnquiryService } from './corporate-enquiry.service';
@@ -73,5 +73,23 @@ export class CorporateEnquiryController {
     @Body() updateCorporateEnquiryDto: UpdateCorporateEnquiryDto,
   ) {
     return this.corporateEnquiryService.update(id, updateCorporateEnquiryDto);
+  }
+
+  @Delete(':id')
+  @UseGuards(ViewOnlyGuard)
+  @ApiOperation({
+    summary: 'Delete corporate enquiry',
+    description: 'Delete an existing corporate enquiry by ID',
+  })
+  @ApiParam({
+    name: 'id',
+    type: Number,
+    description: 'Corporate enquiry ID',
+  })
+  @ApiResponse({ status: 200, description: 'Corporate enquiry deleted successfully' })
+  @ApiResponse({ status: 404, description: 'Corporate enquiry not found' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async remove(@Param('id', ParseIntPipe) id: number) {
+    return this.corporateEnquiryService.remove(id);
   }
 }
