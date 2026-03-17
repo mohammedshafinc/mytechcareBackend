@@ -7,6 +7,7 @@ import { AdminModule } from './admin/admin.module';
 import { BillModule } from './bill/bill.module';
 import { InvoiceModule } from './bill/invoice/invoice.module';
 import { JobSheetModule } from './bill/job-sheet/job-sheet.module';
+import { QuotationModule } from './bill/quotation/quotation.module';
 import { CorporateEnquiryModule } from './corporate-enquiry/corporate-enquiry.module';
 import { B2cEnquiryModule } from './b2c-enquiry/b2c-enquiry.module';
 import { SalesReportModule } from './sales-report/sales-report.module';
@@ -31,6 +32,7 @@ import { ScheduleModule } from '@nestjs/schedule';
     ServiceRequestModule,
     InvoiceModule, // Must be before BillModule so /bill/invoice matches before /bill/:mobile
     JobSheetModule, // Must be before BillModule so /bill/job-sheet matches before /bill/:mobile
+    QuotationModule, // Must be before BillModule so /bill/quotation matches before /bill/:mobile
     BillModule,
     CorporateEnquiryModule,
     B2cEnquiryModule,
