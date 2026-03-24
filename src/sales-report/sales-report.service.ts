@@ -5,6 +5,11 @@ import { Bill } from '../bill/bill.entity';
 import { ServiceRequest } from '../service-request/service-request.entity';
 import { CorporateEnquiry } from '../corporate-enquiry/corporate-enquiry.entity';
 import { B2cEnquiry } from '../b2c-enquiry/b2c-enquiry.entity';
+import { Quotation } from '../bill/quotation/quotation.entity';
+import { Invoice } from '../bill/invoice/invoice.entity';
+import { JobSheet } from '../bill/job-sheet/job-sheet.entity';
+import { Staff } from '../staff/staff.entity';
+import { Store } from '../store/store.entity';
 
 @Injectable()
 export class SalesReportService {
@@ -17,6 +22,16 @@ export class SalesReportService {
     private corporateEnquiryRepository: Repository<CorporateEnquiry>,
     @InjectRepository(B2cEnquiry)
     private b2cEnquiryRepository: Repository<B2cEnquiry>,
+    @InjectRepository(Quotation)
+    private quotationRepository: Repository<Quotation>,
+    @InjectRepository(Invoice)
+    private invoiceRepository: Repository<Invoice>,
+    @InjectRepository(JobSheet)
+    private jobSheetRepository: Repository<JobSheet>,
+    @InjectRepository(Staff)
+    private staffRepository: Repository<Staff>,
+    @InjectRepository(Store)
+    private storeRepository: Repository<Store>,
   ) {}
 
   async getSalesDashboard(startDate?: string, endDate?: string) {
@@ -943,5 +958,576 @@ export class SalesReportService {
     return Array.from(dailyMap.entries())
       .map(([date, count]) => ({ date, count }))
       .sort((a, b) => a.date.localeCompare(b.date));
+  }
+
+  async getQuotationReport(startDate?: string, endDate?: string) {
+    const dateFilter = this.buildDateFilter(startDate, endDate);
+    const [quotations, invoices] = await Promise.all([
+      this.quotationRepository.find({
+        where: dateFilter ? { createdAt: dateFilter } : undefined,
+        order: { createdAt: 'DESC' },
+        relations: ['items'],
+      }),
+      this.invoiceRepository.find({
+        where: dateFilter ? { createdAt: dateFilter } : undefined,
+        relations: ['items'],
+      }),
+    ]);
+
+    const totalQuotations = quotations.length;
+    const totalQuotedAmount = quotations.reduce((sum, q) => sum + Number(q.grandTotal), 0);
+    const averageQuotationValue = totalQuotations > 0 ? totalQuotedAmount / totalQuotations : 0;
+    const totalVat = quotations.reduce((sum, q) => sum + Number(q.vatAmount), 0);
+
+    const byStatus = this.countByStatus(quotations, 'status');
+
+    const acceptedQuotations = quotations.filter(q => q.status === 'accepted' || q.status === 'approved');
+    const rejectedQuotations = quotations.filter(q => q.status === 'rejected');
+    const pendingQuotations = quotations.filter(q => q.status === 'draft' || q.status === 'sent' || q.status === 'pending');
+
+    const acceptedAmount = acceptedQuotations.reduce((sum, q) => sum + Number(q.grandTotal), 0);
+    const rejectedAmount = rejectedQuotations.reduce((sum, q) => sum + Number(q.grandTotal), 0);
+    const pendingAmount = pendingQuotations.reduce((sum, q) => sum + Number(q.grandTotal), 0);
+
+    const conversionRate = totalQuotations > 0 ? (acceptedQuotations.length / totalQuotations) * 100 : 0;
+
+    const quotationToInvoiceCount = quotations.filter(q => {
+      return invoices.some(inv => inv.serviceRequestId && inv.serviceRequestId === q.serviceRequestId);
+    }).length;
+    const quotationToInvoiceRate = totalQuotations > 0 ? (quotationToInvoiceCount / totalQuotations) * 100 : 0;
+
+    const dailyQuotations = this.calculateDailyCounts(quotations, 'createdAt');
+    const monthlyQuotations = this.calculateMonthlyCounts(quotations, 'createdAt');
+
+    const topQuotationsByValue = [...quotations]
+      .sort((a, b) => Number(b.grandTotal) - Number(a.grandTotal))
+      .slice(0, 10)
+      .map(q => ({
+        id: q.id,
+        quotationNumber: q.quotationNumber,
+        customerName: q.customerName,
+        customerMobile: q.customerMobile,
+        grandTotal: Number(q.grandTotal),
+        status: q.status,
+        quotationDate: q.quotationDate,
+        itemCount: q.items?.length || 0,
+      }));
+
+    const byCustomer = this.groupQuotationsByCustomer(quotations);
+
+    const productFrequency: Record<string, { count: number; totalValue: number }> = {};
+    quotations.forEach(q => {
+      (q.items || []).forEach(item => {
+        const key = item.product || 'Unknown';
+        if (!productFrequency[key]) productFrequency[key] = { count: 0, totalValue: 0 };
+        productFrequency[key].count += item.quantity;
+        productFrequency[key].totalValue += Number(item.lineTotal);
+      });
+    });
+    const topProducts = Object.entries(productFrequency)
+      .map(([product, data]) => ({ product, ...data, totalValue: Number(data.totalValue.toFixed(2)) }))
+      .sort((a, b) => b.totalValue - a.totalValue)
+      .slice(0, 10);
+
+    return {
+      success: true,
+      message: 'Quotation report retrieved successfully',
+      data: {
+        summary: {
+          totalQuotations,
+          totalQuotedAmount: Number(totalQuotedAmount.toFixed(2)),
+          averageQuotationValue: Number(averageQuotationValue.toFixed(2)),
+          totalVat: Number(totalVat.toFixed(2)),
+          acceptedCount: acceptedQuotations.length,
+          rejectedCount: rejectedQuotations.length,
+          pendingCount: pendingQuotations.length,
+          acceptedAmount: Number(acceptedAmount.toFixed(2)),
+          rejectedAmount: Number(rejectedAmount.toFixed(2)),
+          pendingAmount: Number(pendingAmount.toFixed(2)),
+          conversionRate: Number(conversionRate.toFixed(2)),
+          quotationToInvoiceRate: Number(quotationToInvoiceRate.toFixed(2)),
+        },
+        byStatus,
+        trends: { daily: dailyQuotations, monthly: monthlyQuotations },
+        topQuotationsByValue,
+        byCustomer: byCustomer.slice(0, 20),
+        topProducts,
+        allQuotations: quotations.map(q => ({
+          id: q.id,
+          quotationNumber: q.quotationNumber,
+          quotationDate: q.quotationDate,
+          validUntil: q.validUntil,
+          customerName: q.customerName,
+          customerMobile: q.customerMobile,
+          subtotal: Number(q.subtotal),
+          vatAmount: Number(q.vatAmount),
+          grandTotal: Number(q.grandTotal),
+          status: q.status,
+          itemCount: q.items?.length || 0,
+          createdAt: q.createdAt,
+        })),
+        dateRange: { startDate: startDate || null, endDate: endDate || null },
+      },
+    };
+  }
+
+  private groupQuotationsByCustomer(quotations: Quotation[]) {
+    const map = new Map<string, { customerName: string; customerMobile: string | null; count: number; totalValue: number }>();
+    quotations.forEach(q => {
+      const key = q.customerMobile || q.customerName || 'Unknown';
+      const existing = map.get(key) || { customerName: q.customerName, customerMobile: q.customerMobile, count: 0, totalValue: 0 };
+      existing.count += 1;
+      existing.totalValue += Number(q.grandTotal);
+      map.set(key, existing);
+    });
+    return Array.from(map.values())
+      .map(c => ({ ...c, totalValue: Number(c.totalValue.toFixed(2)) }))
+      .sort((a, b) => b.totalValue - a.totalValue);
+  }
+
+  async getInvoiceReport(startDate?: string, endDate?: string) {
+    const dateFilter = this.buildDateFilter(startDate, endDate);
+    const [invoices, quotations] = await Promise.all([
+      this.invoiceRepository.find({
+        where: dateFilter ? { createdAt: dateFilter } : undefined,
+        order: { createdAt: 'DESC' },
+        relations: ['items'],
+      }),
+      this.quotationRepository.find({
+        where: dateFilter ? { createdAt: dateFilter } : undefined,
+      }),
+    ]);
+
+    const totalInvoices = invoices.length;
+    const totalInvoicedAmount = invoices.reduce((sum, inv) => sum + Number(inv.grandTotal), 0);
+    const averageInvoiceValue = totalInvoices > 0 ? totalInvoicedAmount / totalInvoices : 0;
+    const totalVat = invoices.reduce((sum, inv) => sum + Number(inv.vatAmount), 0);
+
+    const byStatus = this.countByStatus(invoices, 'status');
+    const byPaymentMethod = this.countByField(invoices, 'paymentMethod');
+
+    const paymentMethodRevenue: Record<string, number> = {};
+    invoices.forEach(inv => {
+      const method = inv.paymentMethod || 'Unknown';
+      paymentMethodRevenue[method] = (paymentMethodRevenue[method] || 0) + Number(inv.grandTotal);
+    });
+    Object.keys(paymentMethodRevenue).forEach(k => {
+      paymentMethodRevenue[k] = Number(paymentMethodRevenue[k].toFixed(2));
+    });
+
+    const totalQuotedAmount = quotations.reduce((sum, q) => sum + Number(q.grandTotal), 0);
+    const quotationVsInvoice = {
+      totalQuotedAmount: Number(totalQuotedAmount.toFixed(2)),
+      totalInvoicedAmount: Number(totalInvoicedAmount.toFixed(2)),
+      difference: Number((totalInvoicedAmount - totalQuotedAmount).toFixed(2)),
+      totalQuotations: quotations.length,
+      totalInvoices,
+    };
+
+    const dailyInvoices = this.calculateDailyCounts(invoices, 'createdAt');
+    const monthlyInvoices = this.calculateMonthlyCounts(invoices, 'createdAt');
+
+    const dailyRevenue: Array<{ date: string; amount: number; count: number }> = [];
+    const revenueMap = new Map<string, { amount: number; count: number }>();
+    invoices.forEach(inv => {
+      const dateKey = new Date(inv.createdAt).toISOString().split('T')[0];
+      const existing = revenueMap.get(dateKey) || { amount: 0, count: 0 };
+      existing.amount += Number(inv.grandTotal);
+      existing.count += 1;
+      revenueMap.set(dateKey, existing);
+    });
+    revenueMap.forEach((val, key) => dailyRevenue.push({ date: key, amount: Number(val.amount.toFixed(2)), count: val.count }));
+    dailyRevenue.sort((a, b) => a.date.localeCompare(b.date));
+
+    const topInvoicesByValue = [...invoices]
+      .sort((a, b) => Number(b.grandTotal) - Number(a.grandTotal))
+      .slice(0, 10)
+      .map(inv => ({
+        id: inv.id,
+        invoiceNumber: inv.invoiceNumber,
+        customerName: inv.customerName,
+        customerMobile: inv.customerMobile,
+        grandTotal: Number(inv.grandTotal),
+        paymentMethod: inv.paymentMethod,
+        status: inv.status,
+        invoiceDate: inv.invoiceDate,
+        itemCount: inv.items?.length || 0,
+      }));
+
+    const byCustomer = this.groupInvoicesByCustomer(invoices);
+
+    return {
+      success: true,
+      message: 'Invoice report retrieved successfully',
+      data: {
+        summary: {
+          totalInvoices,
+          totalInvoicedAmount: Number(totalInvoicedAmount.toFixed(2)),
+          averageInvoiceValue: Number(averageInvoiceValue.toFixed(2)),
+          totalVat: Number(totalVat.toFixed(2)),
+        },
+        byStatus,
+        byPaymentMethod,
+        paymentMethodRevenue,
+        quotationVsInvoice,
+        trends: { daily: dailyInvoices, monthly: monthlyInvoices, dailyRevenue },
+        topInvoicesByValue,
+        byCustomer: byCustomer.slice(0, 20),
+        allInvoices: invoices.map(inv => ({
+          id: inv.id,
+          invoiceNumber: inv.invoiceNumber,
+          invoiceDate: inv.invoiceDate,
+          customerName: inv.customerName,
+          customerMobile: inv.customerMobile,
+          paymentMethod: inv.paymentMethod,
+          subtotal: Number(inv.subtotal),
+          vatAmount: Number(inv.vatAmount),
+          grandTotal: Number(inv.grandTotal),
+          status: inv.status,
+          itemCount: inv.items?.length || 0,
+          createdAt: inv.createdAt,
+        })),
+        dateRange: { startDate: startDate || null, endDate: endDate || null },
+      },
+    };
+  }
+
+  private groupInvoicesByCustomer(invoices: Invoice[]) {
+    const map = new Map<string, { customerName: string; customerMobile: string | null; count: number; totalValue: number }>();
+    invoices.forEach(inv => {
+      const key = inv.customerMobile || inv.customerName || 'Unknown';
+      const existing = map.get(key) || { customerName: inv.customerName, customerMobile: inv.customerMobile, count: 0, totalValue: 0 };
+      existing.count += 1;
+      existing.totalValue += Number(inv.grandTotal);
+      map.set(key, existing);
+    });
+    return Array.from(map.values())
+      .map(c => ({ ...c, totalValue: Number(c.totalValue.toFixed(2)) }))
+      .sort((a, b) => b.totalValue - a.totalValue);
+  }
+
+  async getJobSheetReport(startDate?: string, endDate?: string) {
+    const dateFilter = this.buildDateFilter(startDate, endDate);
+    const jobSheets = await this.jobSheetRepository.find({
+      where: dateFilter ? { createdAt: dateFilter } : undefined,
+      order: { createdAt: 'DESC' },
+      relations: ['items'],
+    });
+
+    const totalJobSheets = jobSheets.length;
+    const byStatus = this.countByStatus(jobSheets, 'status');
+
+    const totalEstimatedCost = jobSheets.reduce((sum, js) => sum + (Number(js.estimatedCost) || 0), 0);
+    const totalActualCost = jobSheets.reduce((sum, js) => {
+      return sum + (js.items || []).reduce((s, item) => s + Number(item.total), 0);
+    }, 0);
+    const costVariance = totalActualCost - totalEstimatedCost;
+
+    const completedSheets = jobSheets.filter(js => js.completedDate && js.receivedDate);
+    let averageRepairDays = 0;
+    if (completedSheets.length > 0) {
+      const totalDays = completedSheets.reduce((sum, js) => {
+        const received = new Date(js.receivedDate!);
+        const completed = new Date(js.completedDate!);
+        return sum + Math.max(0, (completed.getTime() - received.getTime()) / (1000 * 60 * 60 * 24));
+      }, 0);
+      averageRepairDays = totalDays / completedSheets.length;
+    }
+
+    const deliveredSheets = jobSheets.filter(js => js.deliveredDate && js.completedDate);
+    let averageDeliveryDays = 0;
+    if (deliveredSheets.length > 0) {
+      const totalDays = deliveredSheets.reduce((sum, js) => {
+        const completed = new Date(js.completedDate!);
+        const delivered = new Date(js.deliveredDate!);
+        return sum + Math.max(0, (delivered.getTime() - completed.getTime()) / (1000 * 60 * 60 * 24));
+      }, 0);
+      averageDeliveryDays = totalDays / deliveredSheets.length;
+    }
+
+    const byDevice = this.countByField(jobSheets, 'device');
+
+    const technicianMap = new Map<number, { id: number; jobCount: number; completedCount: number; totalParts: number; totalCost: number }>();
+    jobSheets.forEach(js => {
+      if (js.assignedTechnicianId) {
+        const existing = technicianMap.get(js.assignedTechnicianId) || { id: js.assignedTechnicianId, jobCount: 0, completedCount: 0, totalParts: 0, totalCost: 0 };
+        existing.jobCount += 1;
+        if (js.status === 'completed' || js.status === 'delivered') existing.completedCount += 1;
+        (js.items || []).forEach(item => {
+          existing.totalParts += item.quantity;
+          existing.totalCost += Number(item.total);
+        });
+        technicianMap.set(js.assignedTechnicianId, existing);
+      }
+    });
+    const technicianWorkload = Array.from(technicianMap.values())
+      .map(t => ({ ...t, totalCost: Number(t.totalCost.toFixed(2)) }))
+      .sort((a, b) => b.jobCount - a.jobCount);
+
+    const partsMap: Record<string, { count: number; totalCost: number }> = {};
+    jobSheets.forEach(js => {
+      (js.items || []).forEach(item => {
+        const key = item.partName || 'Unknown';
+        if (!partsMap[key]) partsMap[key] = { count: 0, totalCost: 0 };
+        partsMap[key].count += item.quantity;
+        partsMap[key].totalCost += Number(item.total);
+      });
+    });
+    const topParts = Object.entries(partsMap)
+      .map(([partName, data]) => ({ partName, ...data, totalCost: Number(data.totalCost.toFixed(2)) }))
+      .sort((a, b) => b.totalCost - a.totalCost)
+      .slice(0, 10);
+
+    const dailyJobSheets = this.calculateDailyCounts(jobSheets, 'createdAt');
+    const monthlyJobSheets = this.calculateMonthlyCounts(jobSheets, 'createdAt');
+
+    return {
+      success: true,
+      message: 'Job sheet report retrieved successfully',
+      data: {
+        summary: {
+          totalJobSheets,
+          totalEstimatedCost: Number(totalEstimatedCost.toFixed(2)),
+          totalActualCost: Number(totalActualCost.toFixed(2)),
+          costVariance: Number(costVariance.toFixed(2)),
+          averageRepairDays: Number(averageRepairDays.toFixed(1)),
+          averageDeliveryDays: Number(averageDeliveryDays.toFixed(1)),
+          completedCount: completedSheets.length,
+          deliveredCount: deliveredSheets.length,
+        },
+        byStatus,
+        byDevice,
+        technicianWorkload,
+        topParts,
+        trends: { daily: dailyJobSheets, monthly: monthlyJobSheets },
+        allJobSheets: jobSheets.map(js => ({
+          id: js.id,
+          jobSheetNumber: js.jobSheetNumber,
+          customerName: js.customerName,
+          customerMobile: js.customerMobile,
+          device: js.device,
+          deviceDisplayName: js.deviceDisplayName,
+          problemReported: js.problemReported,
+          estimatedCost: Number(js.estimatedCost) || 0,
+          actualCost: (js.items || []).reduce((s, item) => s + Number(item.total), 0),
+          assignedTechnicianId: js.assignedTechnicianId,
+          status: js.status,
+          receivedDate: js.receivedDate,
+          completedDate: js.completedDate,
+          deliveredDate: js.deliveredDate,
+          itemCount: js.items?.length || 0,
+          createdAt: js.createdAt,
+        })),
+        dateRange: { startDate: startDate || null, endDate: endDate || null },
+      },
+    };
+  }
+
+  async getStaffPerformanceReport(startDate?: string, endDate?: string) {
+    const dateFilter = this.buildDateFilter(startDate, endDate);
+    const [staff, serviceRequests, jobSheets] = await Promise.all([
+      this.staffRepository.find({ relations: ['store'] }),
+      this.serviceRequestRepository.find({
+        where: dateFilter ? { createdAt: dateFilter } : undefined,
+        relations: ['assignedStaff'],
+      }),
+      this.jobSheetRepository.find({
+        where: dateFilter ? { createdAt: dateFilter } : undefined,
+        relations: ['items'],
+      }),
+    ]);
+
+    const staffMap = new Map<number, {
+      id: number; empCode: string; name: string; storeName: string; position: string | null; department: string | null;
+      assignedRequests: number; completedRequests: number; pendingRequests: number;
+      assignedJobSheets: number; completedJobSheets: number; totalPartsCost: number;
+      averageRepairDays: number; repairDaysTotal: number; repairDaysCount: number;
+    }>();
+
+    staff.forEach(s => {
+      staffMap.set(s.id, {
+        id: s.id, empCode: s.empCode, name: s.name,
+        storeName: s.store?.storeName || 'N/A',
+        position: s.position, department: s.department,
+        assignedRequests: 0, completedRequests: 0, pendingRequests: 0,
+        assignedJobSheets: 0, completedJobSheets: 0, totalPartsCost: 0,
+        averageRepairDays: 0, repairDaysTotal: 0, repairDaysCount: 0,
+      });
+    });
+
+    serviceRequests.forEach(sr => {
+      if (sr.assignedStaffId && staffMap.has(sr.assignedStaffId)) {
+        const s = staffMap.get(sr.assignedStaffId)!;
+        s.assignedRequests += 1;
+        const status = (sr.status || '').toLowerCase();
+        if (status.includes('closed') || status.includes('completed')) s.completedRequests += 1;
+        else s.pendingRequests += 1;
+      }
+    });
+
+    jobSheets.forEach(js => {
+      if (js.assignedTechnicianId && staffMap.has(js.assignedTechnicianId)) {
+        const s = staffMap.get(js.assignedTechnicianId)!;
+        s.assignedJobSheets += 1;
+        if (js.status === 'completed' || js.status === 'delivered') s.completedJobSheets += 1;
+        s.totalPartsCost += (js.items || []).reduce((sum, item) => sum + Number(item.total), 0);
+        if (js.completedDate && js.receivedDate) {
+          const days = Math.max(0, (new Date(js.completedDate).getTime() - new Date(js.receivedDate).getTime()) / (1000 * 60 * 60 * 24));
+          s.repairDaysTotal += days;
+          s.repairDaysCount += 1;
+        }
+      }
+    });
+
+    const staffPerformance = Array.from(staffMap.values())
+      .filter(s => s.assignedRequests > 0 || s.assignedJobSheets > 0)
+      .map(s => ({
+        ...s,
+        totalPartsCost: Number(s.totalPartsCost.toFixed(2)),
+        averageRepairDays: s.repairDaysCount > 0 ? Number((s.repairDaysTotal / s.repairDaysCount).toFixed(1)) : 0,
+        completionRate: (s.assignedRequests + s.assignedJobSheets) > 0
+          ? Number((((s.completedRequests + s.completedJobSheets) / (s.assignedRequests + s.assignedJobSheets)) * 100).toFixed(1))
+          : 0,
+      }))
+      .sort((a, b) => (b.assignedRequests + b.assignedJobSheets) - (a.assignedRequests + a.assignedJobSheets));
+
+    const totalAssignedRequests = serviceRequests.filter(sr => sr.assignedStaffId).length;
+    const unassignedRequests = serviceRequests.filter(sr => !sr.assignedStaffId).length;
+    const totalAssignedJobSheets = jobSheets.filter(js => js.assignedTechnicianId).length;
+    const unassignedJobSheets = jobSheets.filter(js => !js.assignedTechnicianId).length;
+
+    const byDepartment: Record<string, { staff: number; requests: number; jobSheets: number }> = {};
+    staffPerformance.forEach(s => {
+      const dept = s.department || 'Unassigned';
+      if (!byDepartment[dept]) byDepartment[dept] = { staff: 0, requests: 0, jobSheets: 0 };
+      byDepartment[dept].staff += 1;
+      byDepartment[dept].requests += s.assignedRequests;
+      byDepartment[dept].jobSheets += s.assignedJobSheets;
+    });
+
+    return {
+      success: true,
+      message: 'Staff performance report retrieved successfully',
+      data: {
+        summary: {
+          totalStaff: staff.length,
+          activeStaff: staffPerformance.length,
+          totalAssignedRequests,
+          unassignedRequests,
+          totalAssignedJobSheets,
+          unassignedJobSheets,
+        },
+        staffPerformance,
+        byDepartment,
+        topPerformers: {
+          byRequests: [...staffPerformance].sort((a, b) => b.completedRequests - a.completedRequests).slice(0, 10),
+          byJobSheets: [...staffPerformance].sort((a, b) => b.completedJobSheets - a.completedJobSheets).slice(0, 10),
+          byCompletionRate: [...staffPerformance].sort((a, b) => b.completionRate - a.completionRate).slice(0, 10),
+        },
+        dateRange: { startDate: startDate || null, endDate: endDate || null },
+      },
+    };
+  }
+
+  async getStoreReport(startDate?: string, endDate?: string) {
+    const dateFilter = this.buildDateFilter(startDate, endDate);
+    const [stores, staff, serviceRequests, jobSheets, quotations, invoices, bills] = await Promise.all([
+      this.storeRepository.find(),
+      this.staffRepository.find(),
+      this.serviceRequestRepository.find({
+        where: dateFilter ? { createdAt: dateFilter } : undefined,
+        relations: ['assignedStaff'],
+      }),
+      this.jobSheetRepository.find({
+        where: dateFilter ? { createdAt: dateFilter } : undefined,
+        relations: ['items'],
+      }),
+      this.quotationRepository.find({
+        where: dateFilter ? { createdAt: dateFilter } : undefined,
+      }),
+      this.invoiceRepository.find({
+        where: dateFilter ? { createdAt: dateFilter } : undefined,
+      }),
+      this.billRepository.find({
+        where: dateFilter ? { createdAt: dateFilter } : undefined,
+      }),
+    ]);
+
+    const staffByStore = new Map<number, number[]>();
+    staff.forEach(s => {
+      const list = staffByStore.get(s.storeId) || [];
+      list.push(s.id);
+      staffByStore.set(s.storeId, list);
+    });
+
+    const storeMetrics = stores.map(store => {
+      const storeStaffIds = staffByStore.get(store.id) || [];
+
+      const storeServiceRequests = serviceRequests.filter(sr => sr.assignedStaffId && storeStaffIds.includes(sr.assignedStaffId));
+      const storeJobSheets = jobSheets.filter(js => js.assignedTechnicianId && storeStaffIds.includes(js.assignedTechnicianId));
+
+      const storeBillRevenue = bills.reduce((sum, b) => sum + Number(b.sellingPrice), 0);
+      const storeJobSheetCost = storeJobSheets.reduce((sum, js) => {
+        return sum + (js.items || []).reduce((s, item) => s + Number(item.total), 0);
+      }, 0);
+      const storeQuotationValue = quotations.reduce((sum, q) => sum + Number(q.grandTotal), 0);
+      const storeInvoiceValue = invoices.reduce((sum, inv) => sum + Number(inv.grandTotal), 0);
+
+      return {
+        storeId: store.id,
+        storeName: store.storeName,
+        storeCode: store.storeCode,
+        storeLocation: store.storeLocation,
+        staffCount: storeStaffIds.length,
+        serviceRequestCount: storeServiceRequests.length,
+        jobSheetCount: storeJobSheets.length,
+        jobSheetPartsCost: Number(storeJobSheetCost.toFixed(2)),
+      };
+    });
+
+    const overallSummary = {
+      totalStores: stores.length,
+      totalStaff: staff.length,
+      totalServiceRequests: serviceRequests.length,
+      totalJobSheets: jobSheets.length,
+      totalQuotations: quotations.length,
+      totalInvoices: invoices.length,
+      totalBills: bills.length,
+      totalBillRevenue: Number(bills.reduce((sum, b) => sum + Number(b.sellingPrice), 0).toFixed(2)),
+      totalBillCost: Number(bills.reduce((sum, b) => sum + Number(b.costPrice), 0).toFixed(2)),
+      totalBillProfit: Number(bills.reduce((sum, b) => sum + Number(b.sellingPrice) - Number(b.costPrice), 0).toFixed(2)),
+      totalQuotedAmount: Number(quotations.reduce((sum, q) => sum + Number(q.grandTotal), 0).toFixed(2)),
+      totalInvoicedAmount: Number(invoices.reduce((sum, inv) => sum + Number(inv.grandTotal), 0).toFixed(2)),
+    };
+
+    return {
+      success: true,
+      message: 'Store report retrieved successfully',
+      data: {
+        summary: overallSummary,
+        stores: storeMetrics,
+        dateRange: { startDate: startDate || null, endDate: endDate || null },
+      },
+    };
+  }
+
+  private calculateDailyCounts(items: any[], dateField: string): Array<{ date: string; count: number }> {
+    const map = new Map<string, number>();
+    items.forEach(item => {
+      const d = new Date(item[dateField]);
+      const key = d.toISOString().split('T')[0];
+      map.set(key, (map.get(key) || 0) + 1);
+    });
+    return Array.from(map.entries()).map(([date, count]) => ({ date, count })).sort((a, b) => a.date.localeCompare(b.date));
+  }
+
+  private calculateMonthlyCounts(items: any[], dateField: string): Array<{ month: string; count: number }> {
+    const map = new Map<string, number>();
+    items.forEach(item => {
+      const d = new Date(item[dateField]);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      map.set(key, (map.get(key) || 0) + 1);
+    });
+    return Array.from(map.entries()).map(([month, count]) => ({ month, count })).sort((a, b) => a.month.localeCompare(b.month));
   }
 }

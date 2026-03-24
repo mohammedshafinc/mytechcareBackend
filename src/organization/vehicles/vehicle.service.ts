@@ -9,6 +9,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, IsNull } from 'typeorm';
 import { Vehicle, VehicleStatus } from './vehicle.entity';
 import { VehicleExpense } from './vehicle-expense.entity';
+import { RentalVehicle, RentalVehicleStatus, RentalPaymentStatus } from './rental-vehicle.entity';
 import { Store } from '../../store/store.entity';
 import { Admin } from '../../user/admin.entity';
 import { CreateVehicleDto } from './dto/create-vehicle.dto';
@@ -30,6 +31,8 @@ export class VehicleService {
     private vehicleRepository: Repository<Vehicle>,
     @InjectRepository(VehicleExpense)
     private expenseRepository: Repository<VehicleExpense>,
+    @InjectRepository(RentalVehicle)
+    private rentalVehicleRepository: Repository<RentalVehicle>,
     @InjectRepository(Store)
     private storeRepository: Repository<Store>,
     @InjectRepository(Admin)
@@ -374,6 +377,7 @@ export class VehicleService {
         data: {
           summary: { total: 0, active: 0, inactive: 0 },
           expenses: { total: 0, byType: {}, byStore: [], byVehicle: [] },
+          rental: { summary: { total: 0, active: 0, returned: 0, overdue: 0, cancelled: 0 }, totalCost: 0, totalDeposit: 0, byPaymentStatus: {}, byCompany: [], byStore: [], vehicles: [] },
           dateRange: { startDate: startDate || null, endDate: endDate || null },
         },
       };
@@ -402,12 +406,8 @@ export class VehicleService {
         message: 'Vehicles report retrieved successfully',
         data: {
           summary,
-          expenses: {
-            total: 0,
-            byType: {},
-            byStore: [],
-            byVehicle: [],
-          },
+          expenses: { total: 0, byType: {}, byStore: [], byVehicle: [] },
+          rental: { summary: { total: 0, active: 0, returned: 0, overdue: 0, cancelled: 0 }, totalCost: 0, totalDeposit: 0, byPaymentStatus: {}, byCompany: [], byStore: [], vehicles: [] },
           dateRange: { startDate: startDate || null, endDate: endDate || null },
         },
       };
@@ -470,6 +470,64 @@ export class VehicleService {
       .map((v) => ({ ...v, total: Number(v.total.toFixed(2)) }))
       .sort((a, b) => b.total - a.total);
 
+    const rentalQb = this.rentalVehicleRepository
+      .createQueryBuilder('r')
+      .where('r.deleted_at IS NULL');
+    if (allowed !== null && allowed.length > 0) {
+      rentalQb.andWhere('r.store_id IN (:...storeIds)', { storeIds });
+    }
+    if (start || end) {
+      const rangeStart = start || new Date('1970-01-01');
+      const rangeEnd = end || new Date();
+      rentalQb.andWhere('r.start_date <= :rangeEnd AND (r.end_date >= :rangeStart OR r.actual_return_date >= :rangeStart)', { rangeStart, rangeEnd });
+    }
+    const rentalVehicles = await rentalQb.leftJoinAndSelect('r.store', 'rstore').getMany();
+
+    const rentalSummary = {
+      total: rentalVehicles.length,
+      active: rentalVehicles.filter(r => r.status === RentalVehicleStatus.ACTIVE).length,
+      returned: rentalVehicles.filter(r => r.status === RentalVehicleStatus.RETURNED).length,
+      overdue: rentalVehicles.filter(r => r.status === RentalVehicleStatus.OVERDUE).length,
+      cancelled: rentalVehicles.filter(r => r.status === RentalVehicleStatus.CANCELLED).length,
+    };
+    const rentalTotalCost = rentalVehicles.reduce((sum, r) => sum + Number(r.totalCost), 0);
+    const rentalTotalDeposit = rentalVehicles.reduce((sum, r) => sum + Number(r.depositAmount), 0);
+    const rentalByPaymentStatus: Record<string, number> = {};
+    rentalVehicles.forEach(r => {
+      rentalByPaymentStatus[r.paymentStatus] = (rentalByPaymentStatus[r.paymentStatus] || 0) + 1;
+    });
+    const rentalByCompany: Record<string, { count: number; totalCost: number }> = {};
+    rentalVehicles.forEach(r => {
+      const key = r.rentalCompany || 'Unknown';
+      if (!rentalByCompany[key]) rentalByCompany[key] = { count: 0, totalCost: 0 };
+      rentalByCompany[key].count += 1;
+      rentalByCompany[key].totalCost += Number(r.totalCost);
+    });
+    const rentalByStore: Array<{ storeId: number; storeCode: string; count: number; totalCost: number }> = [];
+    const rentalStoreMap = new Map<number, { storeId: number; storeCode: string; count: number; totalCost: number }>();
+    rentalVehicles.forEach(r => {
+      const existing = rentalStoreMap.get(r.storeId) || { storeId: r.storeId, storeCode: r.store?.storeCode || 'N/A', count: 0, totalCost: 0 };
+      existing.count += 1;
+      existing.totalCost += Number(r.totalCost);
+      rentalStoreMap.set(r.storeId, existing);
+    });
+    rentalStoreMap.forEach(val => rentalByStore.push({ ...val, totalCost: Number(val.totalCost.toFixed(2)) }));
+
+    const rentalVehiclesList = rentalVehicles.map(r => ({
+      id: r.id,
+      vehicleNumber: r.vehicleNumber,
+      model: r.model,
+      rentalCompany: r.rentalCompany,
+      startDate: r.startDate,
+      endDate: r.endDate,
+      actualReturnDate: r.actualReturnDate,
+      dailyRate: Number(r.dailyRate),
+      totalCost: Number(r.totalCost),
+      depositAmount: Number(r.depositAmount),
+      paymentStatus: r.paymentStatus,
+      status: r.status,
+    }));
+
     return {
       success: true,
       message: 'Vehicles report retrieved successfully',
@@ -482,6 +540,19 @@ export class VehicleService {
           ),
           byStore,
           byVehicle,
+        },
+        rental: {
+          summary: rentalSummary,
+          totalCost: Number(rentalTotalCost.toFixed(2)),
+          totalDeposit: Number(rentalTotalDeposit.toFixed(2)),
+          byPaymentStatus: rentalByPaymentStatus,
+          byCompany: Object.entries(rentalByCompany).map(([company, data]) => ({
+            company,
+            count: data.count,
+            totalCost: Number(data.totalCost.toFixed(2)),
+          })).sort((a, b) => b.totalCost - a.totalCost),
+          byStore: rentalByStore,
+          vehicles: rentalVehiclesList,
         },
         dateRange: { startDate: startDate || null, endDate: endDate || null },
       },
