@@ -6,11 +6,13 @@ import { CreateBillDto } from './dto/create-bill.dto';
 import { ModuleGuard } from '../auth/guards/module.guard';
 import { ViewOnlyGuard } from '../auth/guards/view-only.guard';
 import { RequireModule } from '../auth/decorators/require-module.decorator';
+import { RequireSubmodule } from '../auth/decorators/require-submodule.decorator';
 
 @ApiTags('Bill')
 @ApiBearerAuth()
 @UseGuards(AuthGuard('jwt'), ModuleGuard)
 @RequireModule('CLIENTS')
+@RequireSubmodule('BILLS')
 @Controller('bill')
 export class BillController {
   constructor(private readonly billService: BillService) {}

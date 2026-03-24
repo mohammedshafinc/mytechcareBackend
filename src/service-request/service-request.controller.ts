@@ -8,10 +8,12 @@ import { UpdateServiceRequestDto } from './dto/update-service-request.dto';
 import { ModuleGuard } from '../auth/guards/module.guard';
 import { ViewOnlyGuard } from '../auth/guards/view-only.guard';
 import { RequireModule } from '../auth/decorators/require-module.decorator';
+import { RequireSubmodule } from '../auth/decorators/require-submodule.decorator';
 
 @ApiTags('Service Request')
 @ApiBearerAuth()
 @UseGuards(AuthGuard('jwt'), ModuleGuard)
+@RequireSubmodule('SERVICE_REQUESTS')
 @Controller('admin/service-request')
 export class ServiceRequestController {
   constructor(private readonly serviceRequestService: ServiceRequestService) {}

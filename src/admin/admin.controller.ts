@@ -9,6 +9,7 @@ import {
 } from '@nestjs/swagger';
 import { ModuleGuard } from '../auth/guards/module.guard';
 import { RequireModule } from '../auth/decorators/require-module.decorator';
+import { RequireSubmodule } from '../auth/decorators/require-submodule.decorator';
 import { AdminService } from './admin.service';
 
 @ApiTags('Admin')
@@ -19,6 +20,7 @@ export class AdminController {
 
   @UseGuards(AuthGuard('jwt'), ModuleGuard)
   @RequireModule('REPORTS')
+  @RequireSubmodule('DASHBOARD_VIEW')
   @Get('dashboard')
   @ApiOperation({
     summary: 'Get admin dashboard',

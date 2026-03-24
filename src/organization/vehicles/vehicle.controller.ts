@@ -24,6 +24,7 @@ import {
 import { ModuleGuard } from '../../auth/guards/module.guard';
 import { ViewOnlyGuard } from '../../auth/guards/view-only.guard';
 import { RequireModule } from '../../auth/decorators/require-module.decorator';
+import { RequireSubmodule } from '../../auth/decorators/require-submodule.decorator';
 import { VehicleService } from './vehicle.service';
 import { RequestUser } from './vehicle.service';
 import { CreateVehicleDto } from './dto/create-vehicle.dto';
@@ -36,6 +37,7 @@ import { UpdateVehicleExpenseDto } from './dto/update-vehicle-expense.dto';
 @Controller('organization/vehicles')
 @UseGuards(AuthGuard('jwt'), ModuleGuard)
 @RequireModule('ORGANIZATION')
+@RequireSubmodule('VEHICLES')
 export class VehicleController {
   constructor(private readonly vehicleService: VehicleService) {}
 

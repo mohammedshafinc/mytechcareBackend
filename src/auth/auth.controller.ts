@@ -8,6 +8,7 @@ import { CreateAdminUserDto } from './dto/create-admin-user.dto';
 import { UpdateAdminUserDto } from './dto/update-admin-user.dto';
 import { BlockLoginDto } from './dto/block-login.dto';
 import { UpdateUserModulesDto } from './dto/update-user-modules.dto';
+import { UpdateUserSubmodulesDto } from './dto/update-user-submodules.dto';
 import { ModuleGuard } from './guards/module.guard';
 import { ViewOnlyGuard } from './guards/view-only.guard';
 import { RequireModule } from './decorators/require-module.decorator';
@@ -210,6 +211,74 @@ export class AuthController {
     const requestingUserId = req.user?.sub;
     if (!requestingUserId) throw new UnauthorizedException();
     return this.authService.resetUserToRoleModules(userId, requestingUserId);
+  }
+
+  @Get('admin/submodules')
+  @UseGuards(AuthGuard('jwt'), ModuleGuard)
+  @RequireModule('AUTH')
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get all submodules',
+    description:
+      'Returns all available submodules with their parent module mapping',
+  })
+  @ApiResponse({ status: 200, description: 'Submodules fetched successfully' })
+  getAllSubmodules() {
+    return this.authService.getAllSubmodules();
+  }
+
+  @Post('admin/users/submodules')
+  @UseGuards(AuthGuard('jwt'), ModuleGuard, ViewOnlyGuard)
+  @RequireModule('AUTH')
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Update user submodules',
+    description:
+      'Update submodule permissions for a specific user. Submodules must belong to modules the user has enabled. Cannot modify SUPER_ADMIN.',
+  })
+  @ApiBody({ type: UpdateUserSubmodulesDto })
+  @ApiResponse({
+    status: 200,
+    description: 'User submodules updated successfully',
+  })
+  @ApiResponse({
+    status: 400,
+    description:
+      'Cannot modify Super Admin, invalid submodules, or submodule belongs to disabled module',
+  })
+  updateUserSubmodules(
+    @Body() dto: UpdateUserSubmodulesDto,
+    @Req() req: Request & { user?: { sub: number } },
+  ) {
+    const requestingUserId = req.user?.sub;
+    if (!requestingUserId) throw new UnauthorizedException();
+    return this.authService.updateUserSubmodules(
+      dto.userId,
+      dto.submodules,
+      requestingUserId,
+    );
+  }
+
+  @Post('admin/users/:userId/reset-submodules')
+  @UseGuards(AuthGuard('jwt'), ModuleGuard, ViewOnlyGuard)
+  @RequireModule('AUTH')
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Reset user to default submodules',
+    description:
+      'Remove custom submodule assignments and reset to module-derived defaults (all submodules of enabled modules)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'User submodules reset to defaults',
+  })
+  resetUserSubmodules(
+    @Param('userId', ParseIntPipe) userId: number,
+    @Req() req: Request & { user?: { sub: number } },
+  ) {
+    const requestingUserId = req.user?.sub;
+    if (!requestingUserId) throw new UnauthorizedException();
+    return this.authService.resetUserSubmodules(userId, requestingUserId);
   }
 
   @Post('admin/users')

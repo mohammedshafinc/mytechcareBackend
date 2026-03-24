@@ -4,11 +4,13 @@ import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@ne
 import { SalesReportService } from './sales-report.service';
 import { ModuleGuard } from '../auth/guards/module.guard';
 import { RequireModule } from '../auth/decorators/require-module.decorator';
+import { RequireSubmodule } from '../auth/decorators/require-submodule.decorator';
 
 @ApiTags('Sales Report')
 @ApiBearerAuth()
 @UseGuards(AuthGuard('jwt'), ModuleGuard)
 @RequireModule('REPORTS')
+@RequireSubmodule('SALES_REPORT')
 @Controller('sales-report')
 export class SalesReportController {
   constructor(private readonly salesReportService: SalesReportService) {}

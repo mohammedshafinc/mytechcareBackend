@@ -10,6 +10,7 @@ import { JobSheetModule } from './bill/job-sheet/job-sheet.module';
 import { QuotationModule } from './bill/quotation/quotation.module';
 import { CorporateEnquiryModule } from './corporate-enquiry/corporate-enquiry.module';
 import { B2cEnquiryModule } from './b2c-enquiry/b2c-enquiry.module';
+import { EnquiryFollowupModule } from './enquiry-followup/enquiry-followup.module';
 import { SalesReportModule } from './sales-report/sales-report.module';
 import { ModuleDefinitionModule } from './module/module.module';
 import { StoreModule } from './store/store.module';
@@ -36,6 +37,7 @@ import { ScheduleModule } from '@nestjs/schedule';
     BillModule,
     CorporateEnquiryModule,
     B2cEnquiryModule,
+    EnquiryFollowupModule,
     SalesReportModule,
     ModuleDefinitionModule,
     StoreModule,

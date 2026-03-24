@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { CorporateEnquiry } from './corporate-enquiry.entity';
 import { B2cEnquiry } from '../b2c-enquiry/b2c-enquiry.entity';
+import { EnquiryFollowup } from '../enquiry-followup/enquiry-followup.entity';
 import { CreateCorporateEnquiryDto } from './dto/create-corporate-enquiry.dto';
 import { UpdateCorporateEnquiryDto } from './dto/update-corporate-enquiry.dto';
 
@@ -13,40 +14,69 @@ export class CorporateEnquiryService {
     private corporateEnquiryRepository: Repository<CorporateEnquiry>,
     @InjectRepository(B2cEnquiry)
     private b2cEnquiryRepository: Repository<B2cEnquiry>,
+    @InjectRepository(EnquiryFollowup)
+    private followupRepository: Repository<EnquiryFollowup>,
   ) {}
 
   async findAll() {
-    const enquiries = await this.corporateEnquiryRepository.find({
-      order: { createdAt: 'DESC' },
-    });
+    const [enquiries, allFollowups] = await Promise.all([
+      this.corporateEnquiryRepository.find({
+        order: { createdAt: 'DESC' },
+      }),
+      this.followupRepository.find({
+        where: { enquiryType: 'corporate' },
+        order: { followupNumber: 'ASC' },
+      }),
+    ]);
+
+    const followupMap = new Map<number, EnquiryFollowup[]>();
+    for (const fu of allFollowups) {
+      if (!followupMap.has(fu.enquiryId)) followupMap.set(fu.enquiryId, []);
+      followupMap.get(fu.enquiryId)!.push(fu);
+    }
+
+    const data = enquiries.map(enquiry => ({
+      ...enquiry,
+      followups: followupMap.get(enquiry.id) || [],
+    }));
 
     return {
       success: true,
       message: 'Corporate enquiries retrieved successfully',
-      data: enquiries,
+      data,
     };
   }
 
   async findAllEnquiries() {
-    // Fetch both corporate and B2C enquiries
-    const [corporateEnquiries, b2cEnquiries] = await Promise.all([
+    const [corporateEnquiries, b2cEnquiries, allFollowups] = await Promise.all([
       this.corporateEnquiryRepository.find({
         order: { createdAt: 'DESC' },
       }),
       this.b2cEnquiryRepository.find({
         order: { createdAt: 'DESC' },
       }),
+      this.followupRepository.find({
+        order: { followupNumber: 'ASC' },
+      }),
     ]);
 
-    // Combine and sort all enquiries by createdAt
+    const followupMap = new Map<string, EnquiryFollowup[]>();
+    for (const fu of allFollowups) {
+      const key = `${fu.enquiryType}_${fu.enquiryId}`;
+      if (!followupMap.has(key)) followupMap.set(key, []);
+      followupMap.get(key)!.push(fu);
+    }
+
     const allEnquiries = [
       ...corporateEnquiries.map(enquiry => ({
         ...enquiry,
         enquiryCategory: 'corporate',
+        followups: followupMap.get(`corporate_${enquiry.id}`) || [],
       })),
       ...b2cEnquiries.map(enquiry => ({
         ...enquiry,
         enquiryCategory: 'b2c',
+        followups: followupMap.get(`b2c_${enquiry.id}`) || [],
       })),
     ].sort((a, b) => {
       return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();

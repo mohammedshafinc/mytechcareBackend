@@ -26,11 +26,13 @@ import { UpdateJobSheetDto } from './dto/update-job-sheet.dto';
 import { ModuleGuard } from '../../auth/guards/module.guard';
 import { ViewOnlyGuard } from '../../auth/guards/view-only.guard';
 import { RequireModule } from '../../auth/decorators/require-module.decorator';
+import { RequireSubmodule } from '../../auth/decorators/require-submodule.decorator';
 
 @ApiTags('Job Sheet')
 @ApiBearerAuth()
 @UseGuards(AuthGuard('jwt'), ModuleGuard)
 @RequireModule('BILLING')
+@RequireSubmodule('JOB_SHEETS')
 @Controller('bill/job-sheet')
 export class JobSheetController {
   constructor(private readonly jobSheetService: JobSheetService) {}

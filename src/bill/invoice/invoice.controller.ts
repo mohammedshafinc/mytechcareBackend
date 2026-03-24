@@ -26,11 +26,13 @@ import { UpdateInvoiceDto } from './dto/update-invoice.dto';
 import { ModuleGuard } from '../../auth/guards/module.guard';
 import { ViewOnlyGuard } from '../../auth/guards/view-only.guard';
 import { RequireModule } from '../../auth/decorators/require-module.decorator';
+import { RequireSubmodule } from '../../auth/decorators/require-submodule.decorator';
 
 @ApiTags('Invoice')
 @ApiBearerAuth()
 @UseGuards(AuthGuard('jwt'), ModuleGuard)
 @RequireModule('BILLING')
+@RequireSubmodule('INVOICES')
 @Controller('bill/invoice')
 export class InvoiceController {
   constructor(private readonly invoiceService: InvoiceService) {}

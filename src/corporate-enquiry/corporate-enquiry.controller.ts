@@ -7,11 +7,13 @@ import { UpdateCorporateEnquiryDto } from './dto/update-corporate-enquiry.dto';
 import { ModuleGuard } from '../auth/guards/module.guard';
 import { ViewOnlyGuard } from '../auth/guards/view-only.guard';
 import { RequireModule } from '../auth/decorators/require-module.decorator';
+import { RequireSubmodule } from '../auth/decorators/require-submodule.decorator';
 
 @ApiTags('Corporate Enquiry')
 @ApiBearerAuth()
 @UseGuards(AuthGuard('jwt'), ModuleGuard)
 @RequireModule('ENQUIRE')
+@RequireSubmodule('CORPORATE_ENQUIRY')
 @Controller('enquire/corporate')
 export class CorporateEnquiryController {
   constructor(private readonly corporateEnquiryService: CorporateEnquiryService) {}

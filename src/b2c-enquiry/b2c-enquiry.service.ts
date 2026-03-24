@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { B2cEnquiry } from './b2c-enquiry.entity';
+import { EnquiryFollowup } from '../enquiry-followup/enquiry-followup.entity';
 import { CreateB2cEnquiryDto } from './dto/create-b2c-enquiry.dto';
 import { UpdateB2cEnquiryDto } from './dto/update-b2c-enquiry.dto';
 
@@ -10,17 +11,36 @@ export class B2cEnquiryService {
   constructor(
     @InjectRepository(B2cEnquiry)
     private b2cEnquiryRepository: Repository<B2cEnquiry>,
+    @InjectRepository(EnquiryFollowup)
+    private followupRepository: Repository<EnquiryFollowup>,
   ) {}
 
   async findAll() {
-    const enquiries = await this.b2cEnquiryRepository.find({
-      order: { createdAt: 'DESC' },
-    });
+    const [enquiries, allFollowups] = await Promise.all([
+      this.b2cEnquiryRepository.find({
+        order: { createdAt: 'DESC' },
+      }),
+      this.followupRepository.find({
+        where: { enquiryType: 'b2c' },
+        order: { followupNumber: 'ASC' },
+      }),
+    ]);
+
+    const followupMap = new Map<number, EnquiryFollowup[]>();
+    for (const fu of allFollowups) {
+      if (!followupMap.has(fu.enquiryId)) followupMap.set(fu.enquiryId, []);
+      followupMap.get(fu.enquiryId)!.push(fu);
+    }
+
+    const data = enquiries.map(enquiry => ({
+      ...enquiry,
+      followups: followupMap.get(enquiry.id) || [],
+    }));
 
     return {
       success: true,
       message: 'B2C enquiries retrieved successfully',
-      data: enquiries,
+      data,
     };
   }
 

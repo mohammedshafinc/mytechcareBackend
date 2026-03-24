@@ -4,12 +4,19 @@ import { DataSource, Repository } from 'typeorm';
 import { User } from '../user/user.entity';
 import { Admin } from '../user/admin.entity';
 import { UserModuleEntity } from '../module/user-module.entity';
+import { UserSubmoduleEntity } from '../module/user-submodule.entity';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
 import { CreateAdminUserDto } from './dto/create-admin-user.dto';
 import { UpdateAdminUserDto } from './dto/update-admin-user.dto';
 import { BlockLoginDto } from './dto/block-login.dto';
-import { MODULE_CODES } from './constants/modules.constants';
+import {
+  MODULE_CODES,
+  SUBMODULE_CODES,
+  MODULE_SUBMODULES,
+  SUBMODULE_TO_MODULE,
+  type SubmoduleCode,
+} from './constants/modules.constants';
 
 @Injectable()
 export class AuthService {
@@ -20,6 +27,8 @@ export class AuthService {
     private adminRepository: Repository<Admin>,
     @InjectRepository(UserModuleEntity)
     private userModuleRepository: Repository<UserModuleEntity>,
+    @InjectRepository(UserSubmoduleEntity)
+    private userSubmoduleRepository: Repository<UserSubmoduleEntity>,
     private readonly jwtService: JwtService,
     @InjectDataSource() private dataSource: DataSource,
   ) {}
@@ -54,6 +63,64 @@ export class AuthService {
     return rows.map((r) => r.module_code);
   }
 
+  /** All submodule codes from the shared constant. */
+  getAllSubmoduleCodes(): string[] {
+    return [...SUBMODULE_CODES];
+  }
+
+  /**
+   * Get all available submodules grouped by parent module.
+   */
+  async getAllSubmodules(): Promise<
+    { code: string; name: string | null; moduleCode: string }[]
+  > {
+    const rows = await this.dataSource.query<
+      { code: string; name: string | null; module_code: string }[]
+    >('SELECT code, name, module_code FROM submodules ORDER BY module_code, code');
+    return rows.map((r) => ({
+      code: r.code,
+      name: r.name,
+      moduleCode: r.module_code,
+    }));
+  }
+
+  /**
+   * Get submodules for a specific user.
+   * SUPER_ADMIN gets all submodules.
+   * If user has custom user_submodules rows, use those.
+   * Otherwise derive from their modules: all submodules of each enabled module.
+   */
+  async getSubmodulesForUser(userId: number): Promise<string[]> {
+    const admin = await this.adminRepository.findOne({ where: { id: userId } });
+    if (!admin) {
+      throw new UnauthorizedException('Admin not found');
+    }
+
+    if (admin.role === 'SUPER_ADMIN') {
+      return this.getAllSubmoduleCodes();
+    }
+
+    const userSubs = await this.dataSource.query<{ submodule_code: string }[]>(
+      'SELECT submodule_code FROM user_submodules WHERE user_id = $1',
+      [userId],
+    );
+
+    if (userSubs.length > 0) {
+      return userSubs.map((r) => r.submodule_code);
+    }
+
+    // Derive from modules: all submodules of each enabled module
+    const modules = await this.getModulesForUser(userId);
+    const subs: string[] = [];
+    for (const mod of modules) {
+      const children = MODULE_SUBMODULES[mod as keyof typeof MODULE_SUBMODULES];
+      if (children) {
+        subs.push(...children);
+      }
+    }
+    return subs;
+  }
+
   /**
    * Get modules for a specific user (user-level > role-level for non-SUPER_ADMIN)
    */
@@ -83,7 +150,7 @@ export class AuthService {
   }
 
   /**
-   * Get all users with their modules for RBAC management
+   * Get all users with their modules and submodules for RBAC management
    */
   async getAllUsersWithModules(): Promise<{
     users: Array<{
@@ -93,35 +160,66 @@ export class AuthService {
       role: string;
       isActive: boolean;
       modules: string[];
+      submodules: string[];
       hasCustomModules: boolean;
+      hasCustomSubmodules: boolean;
       viewOnly: boolean;
     }>;
     allModules: { code: string; name: string | null }[];
+    allSubmodules: { code: string; name: string | null; moduleCode: string }[];
+    moduleSubmodules: Record<string, readonly string[]>;
   }> {
     const admins = await this.adminRepository.find({
       order: { createdAt: 'DESC' },
     });
 
     const allModules = await this.getAllModules();
+    const allSubmodules = await this.getAllSubmodules();
     const allModuleCodes = this.getAllModuleCodes();
+    const allSubmoduleCodes = this.getAllSubmoduleCodes();
 
     const users = await Promise.all(
       admins.map(async (admin) => {
-        // Check for user-specific modules
         const userModules = await this.dataSource.query<
           { module_code: string }[]
         >('SELECT module_code FROM user_modules WHERE user_id = $1', [admin.id]);
 
+        const userSubs = await this.dataSource.query<
+          { submodule_code: string }[]
+        >('SELECT submodule_code FROM user_submodules WHERE user_id = $1', [admin.id]);
+
         let modules: string[];
         let hasCustomModules = false;
+        let submodules: string[];
+        let hasCustomSubmodules = false;
 
         if (admin.role === 'SUPER_ADMIN') {
           modules = allModuleCodes;
-        } else if (userModules.length > 0) {
-          modules = userModules.map((r) => r.module_code);
-          hasCustomModules = true;
+          submodules = allSubmoduleCodes;
         } else {
-          modules = await this.getModulesForRole(admin.role ?? 'ADMIN');
+          // Modules
+          if (userModules.length > 0) {
+            modules = userModules.map((r) => r.module_code);
+            hasCustomModules = true;
+          } else {
+            modules = await this.getModulesForRole(admin.role ?? 'ADMIN');
+          }
+
+          // Submodules
+          if (userSubs.length > 0) {
+            submodules = userSubs.map((r) => r.submodule_code);
+            hasCustomSubmodules = true;
+          } else {
+            // Derive from modules
+            submodules = [];
+            for (const mod of modules) {
+              const children =
+                MODULE_SUBMODULES[mod as keyof typeof MODULE_SUBMODULES];
+              if (children) {
+                submodules.push(...children);
+              }
+            }
+          }
         }
 
         return {
@@ -131,13 +229,20 @@ export class AuthService {
           role: admin.role ?? 'ADMIN',
           isActive: admin.isActive,
           modules,
+          submodules,
           hasCustomModules,
+          hasCustomSubmodules,
           viewOnly: admin.viewOnly ?? false,
         };
       }),
     );
 
-    return { users, allModules };
+    return {
+      users,
+      allModules,
+      allSubmodules,
+      moduleSubmodules: MODULE_SUBMODULES as Record<string, readonly string[]>,
+    };
   }
 
   /**
@@ -228,6 +333,110 @@ export class AuthService {
   }
 
   /**
+   * Update submodules for a specific user.
+   * Only submodules that belong to the user's enabled modules are allowed.
+   */
+  async updateUserSubmodules(
+    userId: number,
+    submodules: string[],
+    requestingUserId: number,
+  ): Promise<{ success: boolean; message: string; submodules: string[] }> {
+    const admin = await this.adminRepository.findOne({ where: { id: userId } });
+    if (!admin) {
+      throw new BadRequestException('User not found');
+    }
+
+    if (admin.role === 'SUPER_ADMIN') {
+      throw new BadRequestException('Cannot modify Super Admin permissions');
+    }
+
+    if (userId === requestingUserId) {
+      throw new BadRequestException('Cannot modify your own permissions');
+    }
+
+    // Validate submodule codes
+    const validSubs = this.getAllSubmoduleCodes();
+    const invalidSubs = submodules.filter((s) => !validSubs.includes(s));
+    if (invalidSubs.length > 0) {
+      throw new BadRequestException(
+        `Invalid submodule codes: ${invalidSubs.join(', ')}`,
+      );
+    }
+
+    // Ensure each submodule belongs to a module the user has
+    const userModules = await this.getModulesForUser(userId);
+    for (const sub of submodules) {
+      const parentModule = SUBMODULE_TO_MODULE[sub as SubmoduleCode];
+      if (parentModule && !userModules.includes(parentModule)) {
+        throw new BadRequestException(
+          `Submodule '${sub}' belongs to module '${parentModule}' which is not enabled for this user`,
+        );
+      }
+    }
+
+    await this.dataSource.query(
+      'DELETE FROM user_submodules WHERE user_id = $1',
+      [userId],
+    );
+
+    for (const subCode of submodules) {
+      await this.dataSource.query(
+        'INSERT INTO user_submodules (user_id, submodule_code) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+        [userId, subCode],
+      );
+    }
+
+    return {
+      success: true,
+      message: 'User submodules updated successfully',
+      submodules,
+    };
+  }
+
+  /**
+   * Reset user submodules (remove custom assignments, fall back to module-derived defaults).
+   */
+  async resetUserSubmodules(
+    userId: number,
+    requestingUserId: number,
+  ): Promise<{ success: boolean; message: string; submodules: string[] }> {
+    const admin = await this.adminRepository.findOne({ where: { id: userId } });
+    if (!admin) {
+      throw new BadRequestException('User not found');
+    }
+
+    if (admin.role === 'SUPER_ADMIN') {
+      throw new BadRequestException('Cannot modify Super Admin permissions');
+    }
+
+    if (userId === requestingUserId) {
+      throw new BadRequestException('Cannot modify your own permissions');
+    }
+
+    await this.dataSource.query(
+      'DELETE FROM user_submodules WHERE user_id = $1',
+      [userId],
+    );
+
+    // Return module-derived submodules
+    const modules = await this.getModulesForUser(userId);
+    const submodules: string[] = [];
+    for (const mod of modules) {
+      const children =
+        MODULE_SUBMODULES[mod as keyof typeof MODULE_SUBMODULES];
+      if (children) {
+        submodules.push(...children);
+      }
+    }
+
+    return {
+      success: true,
+      message: 'User submodules reset to module-based defaults',
+      submodules,
+    };
+  }
+
+  /**
    * Loads admin by id, resolves modules for their role, and returns
    * { id, email, name, role, modules, viewOnly }. Throws if admin not found.
    */
@@ -237,6 +446,7 @@ export class AuthService {
     name: string | null;
     role: string;
     modules: string[];
+    submodules: string[];
     viewOnly: boolean;
   }> {
     const admin = await this.adminRepository.findOne({ where: { id: userId } });
@@ -244,12 +454,14 @@ export class AuthService {
       throw new UnauthorizedException('Admin not found');
     }
     const modules = await this.getModulesForUser(admin.id);
+    const submodules = await this.getSubmodulesForUser(admin.id);
     return {
       id: admin.id,
       email: admin.email,
       name: admin.name ?? null,
       role: admin.role ?? 'SUPER_ADMIN',
       modules,
+      submodules,
       viewOnly: admin.viewOnly ?? false,
     };
   }
@@ -350,11 +562,13 @@ export class AuthService {
 
     const role = admin.role || 'SUPER_ADMIN';
     const modules = await this.getModulesForUser(admin.id);
+    const submodules = await this.getSubmodulesForUser(admin.id);
     const payload = {
       sub: admin.id,
       email: admin.email,
       role,
       modules,
+      submodules,
       viewOnly: admin.viewOnly ?? false,
     };
 
@@ -390,7 +604,7 @@ export class AuthService {
     try {
       const decoded = this.jwtService.verify(refreshToken, {
         secret: process.env.JWT_REFRESH_SECRET,
-      }) as { sub: number; email?: string; role?: string; modules?: string[]; viewOnly?: boolean };
+      }) as { sub: number; email?: string; role?: string; modules?: string[]; submodules?: string[]; viewOnly?: boolean };
 
       if (
         typeof decoded !== 'object' ||
@@ -406,12 +620,14 @@ export class AuthService {
       }
 
       const modules = await this.getModulesForUser(decoded.sub);
+      const submodules = await this.getSubmodulesForUser(decoded.sub);
       const role = decoded.role ?? 'SUPER_ADMIN';
       const payload = {
         sub: decoded.sub,
         email: decoded.email,
         role,
         modules,
+        submodules,
         viewOnly: admin.viewOnly ?? false,
       };
 
@@ -591,6 +807,7 @@ export class AuthService {
     if (userId === requestingUserId) {
       throw new BadRequestException('Cannot delete your own account');
     }
+    await this.dataSource.query('DELETE FROM user_submodules WHERE user_id = $1', [userId]);
     await this.dataSource.query('DELETE FROM user_modules WHERE user_id = $1', [userId]);
     await this.adminRepository.remove(admin);
     return {

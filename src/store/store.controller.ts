@@ -1,13 +1,18 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, ParseIntPipe } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBody, ApiResponse, ApiParam } from '@nestjs/swagger';
+import { Controller, Get, Post, Put, Delete, Body, Param, ParseIntPipe, UseGuards } from '@nestjs/common';
+import { AuthGuard } from '@nestjs/passport';
+import { ApiTags, ApiOperation, ApiBody, ApiResponse, ApiParam, ApiBearerAuth } from '@nestjs/swagger';
 import { StoreService } from './store.service';
 import { CreateStoreDto } from './dto/create-store.dto';
 import { UpdateStoreDto } from './dto/update-store.dto';
+import { ModuleGuard } from '../auth/guards/module.guard';
+import { RequireModule } from '../auth/decorators/require-module.decorator';
+import { RequireSubmodule } from '../auth/decorators/require-submodule.decorator';
 
-/**
- * Store controller for form: get next store code when form opens, and create store.
- */
 @ApiTags('Store')
+@ApiBearerAuth()
+@UseGuards(AuthGuard('jwt'), ModuleGuard)
+@RequireModule('ORGANIZATION')
+@RequireSubmodule('STORE_DETAILS')
 @Controller('store')
 export class StoreController {
   constructor(private readonly storeService: StoreService) {}

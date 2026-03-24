@@ -5,6 +5,7 @@ import { AuthService } from './auth.service';
 import { User } from '../user/user.entity';
 import { Admin } from '../user/admin.entity';
 import { UserModuleEntity } from '../module/user-module.entity';
+import { UserSubmoduleEntity } from '../module/user-submodule.entity';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { JwtStrategy } from './jwt.strategy';
@@ -13,7 +14,7 @@ import { ViewOnlyGuard } from './guards/view-only.guard';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([User, Admin, UserModuleEntity]),
+    TypeOrmModule.forFeature([User, Admin, UserModuleEntity, UserSubmoduleEntity]),
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.register({
       secret: process.env.JWT_ACCESS_SECRET,

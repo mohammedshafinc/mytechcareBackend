@@ -22,6 +22,7 @@ import {
 import { ModuleGuard } from '../../auth/guards/module.guard';
 import { ViewOnlyGuard } from '../../auth/guards/view-only.guard';
 import { RequireModule } from '../../auth/decorators/require-module.decorator';
+import { RequireSubmodule } from '../../auth/decorators/require-submodule.decorator';
 import { RentalVehicleService, RequestUser } from './rental-vehicle.service';
 import { CreateRentalVehicleDto } from './dto/create-rental-vehicle.dto';
 import { UpdateRentalVehicleDto } from './dto/update-rental-vehicle.dto';
@@ -31,6 +32,7 @@ import { UpdateRentalVehicleDto } from './dto/update-rental-vehicle.dto';
 @Controller('organization/rental-vehicles')
 @UseGuards(AuthGuard('jwt'), ModuleGuard)
 @RequireModule('ORGANIZATION')
+@RequireSubmodule('RENTAL_VEHICLES')
 export class RentalVehicleController {
   constructor(private readonly rentalVehicleService: RentalVehicleService) {}
 

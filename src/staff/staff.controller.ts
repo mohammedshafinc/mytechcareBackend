@@ -1,10 +1,18 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, ParseIntPipe, Query, BadRequestException } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBody, ApiResponse, ApiParam, ApiQuery } from '@nestjs/swagger';
+import { Controller, Get, Post, Put, Delete, Body, Param, ParseIntPipe, Query, BadRequestException, UseGuards } from '@nestjs/common';
+import { AuthGuard } from '@nestjs/passport';
+import { ApiTags, ApiOperation, ApiBody, ApiResponse, ApiParam, ApiQuery, ApiBearerAuth } from '@nestjs/swagger';
 import { StaffService } from './staff.service';
 import { CreateStaffDto } from './dto/create-staff.dto';
 import { UpdateStaffDto } from './dto/update-staff.dto';
+import { ModuleGuard } from '../auth/guards/module.guard';
+import { RequireModule } from '../auth/decorators/require-module.decorator';
+import { RequireSubmodule } from '../auth/decorators/require-submodule.decorator';
 
 @ApiTags('Staff')
+@ApiBearerAuth()
+@UseGuards(AuthGuard('jwt'), ModuleGuard)
+@RequireModule('ORGANIZATION')
+@RequireSubmodule('STAFF')
 @Controller('staff')
 export class StaffController {
   constructor(private readonly staffService: StaffService) {}

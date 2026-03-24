@@ -6,6 +6,7 @@ import { CreateBillDto } from '../bill/dto/create-bill.dto';
 import { ModuleGuard } from '../auth/guards/module.guard';
 import { ViewOnlyGuard } from '../auth/guards/view-only.guard';
 import { RequireModule } from '../auth/decorators/require-module.decorator';
+import { RequireSubmodule } from '../auth/decorators/require-submodule.decorator';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 
@@ -13,6 +14,7 @@ import { validate } from 'class-validator';
 @ApiBearerAuth()
 @UseGuards(AuthGuard('jwt'), ModuleGuard)
 @RequireModule('CLIENTS')
+@RequireSubmodule('REPAIR_ITEMS')
 @Controller('repair-item')
 export class RepairItemController {
   constructor(
