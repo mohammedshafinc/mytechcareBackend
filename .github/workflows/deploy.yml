@@ -1,44 +1,22 @@
 name: Build and Push Docker Image
-
 on:
   push:
     branches:
       - main
-
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
       - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
-
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
           context: .
           push: true
           tags: mytechcare/mytechcare-backend:latest
-
-  deploy:
-    runs-on: ubuntu-latest
-    needs: build        # waits for build to finish first
-    steps:
-      - name: Deploy to Mumbai EC2
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          script: |
-            cd ~/mytechcareBackend
-            git pull origin main
-            docker pull mytechcare/mytechcare-backend:latest
-            docker compose down
-            docker compose up -d
-            docker image prune -f
