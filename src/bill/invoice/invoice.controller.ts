@@ -23,6 +23,7 @@ import {
 import { InvoiceService } from './invoice.service';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { UpdateInvoiceDto } from './dto/update-invoice.dto';
+import { ValidateUblXmlDto } from './dto/validate-ubl-xml.dto';
 import { ModuleGuard } from '../../auth/guards/module.guard';
 import { ViewOnlyGuard } from '../../auth/guards/view-only.guard';
 import { RequireModule } from '../../auth/decorators/require-module.decorator';
@@ -105,6 +106,39 @@ export class InvoiceController {
   @ApiResponse({ status: 404, description: 'Invoice not found' })
   async findOne(@Param('id', ParseIntPipe) id: number) {
     return this.invoiceService.findOne(id);
+  }
+
+  @Get(':id/ubl')
+  @ApiOperation({
+    summary: 'Generate UBL XML for invoice',
+    description: 'Generates UBL 2.1 XML (EN16931/ZATCA profile) for a given invoice',
+  })
+  @ApiParam({ name: 'id', type: Number, description: 'Invoice ID' })
+  @ApiResponse({ status: 200, description: 'UBL XML generated successfully' })
+  async generateUbl(@Param('id', ParseIntPipe) id: number) {
+    return this.invoiceService.generateUbl(id);
+  }
+
+  @Get(':id/ubl/validate')
+  @ApiOperation({
+    summary: 'Validate invoice UBL XML',
+    description: 'Generates and validates invoice UBL XML for EN16931/ZATCA profile checks',
+  })
+  @ApiParam({ name: 'id', type: Number, description: 'Invoice ID' })
+  @ApiResponse({ status: 200, description: 'Validation completed' })
+  async validateUbl(@Param('id', ParseIntPipe) id: number) {
+    return this.invoiceService.validateInvoiceUbl(id);
+  }
+
+  @Post('ubl/validate')
+  @ApiOperation({
+    summary: 'Validate raw UBL XML',
+    description: 'Validates any provided UBL XML payload for basic ZATCA/EN16931 profile checks',
+  })
+  @ApiBody({ type: ValidateUblXmlDto })
+  @ApiResponse({ status: 200, description: 'Validation completed' })
+  async validateRawUbl(@Body() body: ValidateUblXmlDto) {
+    return this.invoiceService.validateRawUblXml(body.xml);
   }
 
   @Put(':id')
