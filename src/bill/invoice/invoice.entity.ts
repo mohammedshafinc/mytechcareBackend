@@ -19,6 +19,18 @@ export class Invoice {
   @Column({ name: 'invoice_date', type: 'date' })
   invoiceDate: Date;
 
+  @Column({ type: 'varchar', length: 64, unique: true, nullable: true })
+  uuid: string | null;
+
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  icv: string | null;
+
+  @Column({ name: 'previous_hash', type: 'text', nullable: true })
+  previousHash: string | null;
+
+  @Column({ name: 'issue_timestamp', type: 'timestamptz', nullable: true })
+  issueTimestamp: Date | null;
+
   @Column({ name: 'payment_method', type: 'varchar', length: 50, default: 'Cash' })
   paymentMethod: string;
 

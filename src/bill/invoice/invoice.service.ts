@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
+import { createHash, randomUUID } from 'node:crypto';
 import { Invoice } from './invoice.entity';
 import { InvoiceItem } from './invoice-item.entity';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
@@ -21,6 +22,104 @@ export class InvoiceService {
     private invoiceItemRepository: Repository<InvoiceItem>,
     private dataSource: DataSource,
   ) {}
+
+  private generateInvoiceUuid(): string {
+    return randomUUID();
+  }
+
+  private calculateInvoiceHash(input: {
+    invoiceNumber: string;
+    uuid: string | null;
+    issueTimestamp: Date | null;
+    grandTotal: number;
+  }): string {
+    const payload = [
+      input.invoiceNumber || '',
+      input.uuid || '',
+      input.issueTimestamp ? input.issueTimestamp.toISOString() : '',
+      Number(input.grandTotal || 0).toFixed(2),
+    ].join('|');
+
+    return createHash('sha256').update(payload).digest('base64');
+  }
+
+  private async resolvePhase2Metadata(
+    createInvoiceDto: CreateInvoiceDto,
+    grandTotal: number,
+    queryRunner: ReturnType<DataSource['createQueryRunner']>,
+    invoiceNumber: string,
+  ): Promise<{
+    uuid: string;
+    icv: string;
+    previousHash: string | null;
+    issueTimestamp: Date;
+  }> {
+    const issueTimestamp = createInvoiceDto.issueTimestamp
+      ? new Date(createInvoiceDto.issueTimestamp)
+      : new Date();
+    const uuid = createInvoiceDto.uuid || this.generateInvoiceUuid();
+
+    const [lastInvoice] = await queryRunner.manager.find(Invoice, {
+      order: { id: 'DESC' },
+      take: 1,
+    });
+
+    let icv = (createInvoiceDto.icv || '').trim();
+    if (!icv) {
+      const lastIcv = lastInvoice?.icv ? Number(lastInvoice.icv) : NaN;
+      if (Number.isFinite(lastIcv) && lastIcv >= 0) {
+        icv = String(lastIcv + 1);
+      } else {
+        icv = String((lastInvoice?.id || 0) + 1);
+      }
+    }
+
+    let previousHash = (createInvoiceDto.previousHash || '').trim() || null;
+    if (!previousHash && lastInvoice) {
+      previousHash = this.calculateInvoiceHash({
+        invoiceNumber: lastInvoice.invoiceNumber,
+        uuid: lastInvoice.uuid,
+        issueTimestamp: lastInvoice.issueTimestamp || lastInvoice.createdAt,
+        grandTotal: Number(lastInvoice.grandTotal || 0),
+      });
+    }
+
+    // Keep hash chain meaningful even for first invoice with no previous record.
+    if (!previousHash) {
+      previousHash = this.calculateInvoiceHash({
+        invoiceNumber,
+        uuid,
+        issueTimestamp,
+        grandTotal,
+      });
+    }
+
+    return { uuid, icv, previousHash, issueTimestamp };
+  }
+
+  /**
+   * Parse optional service request id safely.
+   * Returns null for empty values and throws on invalid numbers.
+   */
+  private parseServiceRequestId(serviceRequestId?: string): number | null {
+    if (serviceRequestId === undefined || serviceRequestId === null) {
+      return null;
+    }
+
+    const normalized = serviceRequestId.trim();
+    if (!normalized) {
+      return null;
+    }
+
+    const parsed = Number(normalized);
+    if (!Number.isInteger(parsed) || parsed <= 0) {
+      throw new BadRequestException(
+        'serviceRequestId must be a valid positive integer',
+      );
+    }
+
+    return parsed;
+  }
 
   /**
    * Generate the next invoice number: INV-0001, INV-0002, etc.
@@ -84,12 +183,23 @@ export class InvoiceService {
           })),
         );
 
+      const phase2 = await this.resolvePhase2Metadata(
+        createInvoiceDto,
+        grandTotal,
+        queryRunner,
+        invoiceNumber,
+      );
+
       // Create the invoice
       const invoice = this.invoiceRepository.create({
         invoiceNumber,
         invoiceDate: createInvoiceDto.invoiceDate
           ? new Date(createInvoiceDto.invoiceDate)
           : new Date(),
+        uuid: phase2.uuid,
+        icv: phase2.icv,
+        previousHash: phase2.previousHash,
+        issueTimestamp: phase2.issueTimestamp,
         paymentMethod: createInvoiceDto.paymentMethod || 'Cash',
         customerName: createInvoiceDto.customerName,
         customerMobile: createInvoiceDto.customerMobile || null,
@@ -100,9 +210,9 @@ export class InvoiceService {
         vatAmount,
         grandTotal,
         notes: createInvoiceDto.notes || null,
-        serviceRequestId: createInvoiceDto.serviceRequestId
-          ? parseInt(createInvoiceDto.serviceRequestId)
-          : null,
+        serviceRequestId: this.parseServiceRequestId(
+          createInvoiceDto.serviceRequestId,
+        ),
         status: 'confirmed',
       });
 
@@ -221,6 +331,20 @@ export class InvoiceService {
       }
       if (updateInvoiceDto.paymentMethod !== undefined) {
         invoice.paymentMethod = updateInvoiceDto.paymentMethod;
+      }
+      if (updateInvoiceDto.uuid !== undefined) {
+        invoice.uuid = updateInvoiceDto.uuid || null;
+      }
+      if (updateInvoiceDto.icv !== undefined) {
+        invoice.icv = updateInvoiceDto.icv || null;
+      }
+      if (updateInvoiceDto.previousHash !== undefined) {
+        invoice.previousHash = updateInvoiceDto.previousHash || null;
+      }
+      if (updateInvoiceDto.issueTimestamp !== undefined) {
+        invoice.issueTimestamp = updateInvoiceDto.issueTimestamp
+          ? new Date(updateInvoiceDto.issueTimestamp)
+          : null;
       }
       if (updateInvoiceDto.customerName !== undefined) {
         invoice.customerName = updateInvoiceDto.customerName;

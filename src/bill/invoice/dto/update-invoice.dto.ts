@@ -5,6 +5,8 @@ import {
   IsArray,
   ValidateNested,
   ArrayMinSize,
+  IsUUID,
+  IsDateString,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { CreateInvoiceItemDto } from './create-invoice-item.dto';
@@ -19,6 +21,26 @@ export class UpdateInvoiceDto {
   @IsOptional()
   @IsString()
   paymentMethod?: string;
+
+  @ApiProperty({ example: 'de305d54-75b4-431b-adb2-eb6b9e546014', description: 'Invoice UUID (Phase 2)', required: false })
+  @IsOptional()
+  @IsUUID()
+  uuid?: string;
+
+  @ApiProperty({ example: '1001', description: 'Invoice Counter Value (ICV)', required: false })
+  @IsOptional()
+  @IsString()
+  icv?: string;
+
+  @ApiProperty({ example: 'BASE64_PREVIOUS_HASH', description: 'Previous cleared invoice hash', required: false })
+  @IsOptional()
+  @IsString()
+  previousHash?: string;
+
+  @ApiProperty({ example: '2026-03-26T10:30:00.000Z', description: 'Invoice issue timestamp (ISO)', required: false })
+  @IsOptional()
+  @IsDateString()
+  issueTimestamp?: string;
 
   @ApiProperty({ example: 'Ahmed Ali', description: 'Customer name', required: false })
   @IsOptional()
