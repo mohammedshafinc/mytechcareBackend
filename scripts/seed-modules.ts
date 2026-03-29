@@ -1,6 +1,6 @@
 /**
  * Seeds the modules AND submodules tables from constants.
- * Run after create-modules-table.sql and create-submodule-tables.sql.
+ * Run after modules and submodules tables exist (migrations or schema sync).
  * Requires DB_* env vars (e.g. from .env.development).
  *
  * Usage: npm run seed:modules
