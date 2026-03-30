@@ -1,6 +1,7 @@
-import { Controller, Get, Query, BadRequestException } from '@nestjs/common';
-import { ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { Body, Controller, Get, Post, Query, BadRequestException } from '@nestjs/common';
+import { ApiBody, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { ServiceRequestService } from './service-request.service';
+import { CreateServiceRequestDto } from './dto/create-service-request.dto';
 
 /**
  * Public controller for client-side lookups. No authentication required.
@@ -10,6 +11,19 @@ import { ServiceRequestService } from './service-request.service';
 @Controller('service-request')
 export class ServiceRequestPublicController {
   constructor(private readonly serviceRequestService: ServiceRequestService) {}
+
+  @Post()
+  @ApiOperation({
+    summary: 'Create service request (public)',
+    description:
+      'Create a new service request from client-side without requiring module permissions.',
+  })
+  @ApiBody({ type: CreateServiceRequestDto })
+  @ApiResponse({ status: 201, description: 'Service request created successfully' })
+  @ApiResponse({ status: 400, description: 'Invalid input data' })
+  create(@Body() dto: CreateServiceRequestDto) {
+    return this.serviceRequestService.create(dto);
+  }
 
   @Get('by-mobile')
   @ApiOperation({
