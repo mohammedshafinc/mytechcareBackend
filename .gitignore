@@ -2,6 +2,12 @@
 /dist
 /node_modules
 /build
+/.wrangler
+/.wrangler-ci.jsonc
+/.wrangler-dry-run
+wrangler.local.jsonc
+wrangler.staging.jsonc
+wrangler.production.jsonc
 
 # Logs
 logs
@@ -13,6 +19,7 @@ yarn-error.log*
 lerna-debug.log*
 # Environment files
 .env
+.dev.vars
 .env.local
 .env.development
 .env.development.local

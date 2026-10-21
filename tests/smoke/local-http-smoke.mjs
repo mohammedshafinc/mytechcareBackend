@@ -1,0 +1,21 @@
+const base=process.env.SMOKE_URL??'http://127.0.0.1:8787';
+const token=process.env.SMOKE_BOOTSTRAP_TOKEN,password=process.env.SMOKE_ADMIN_PASSWORD,email=process.env.SMOKE_ADMIN_EMAIL;
+if(!token||!password||!email)throw new Error('missing smoke credentials');
+const check=async(name,response,status)=>{if(response.status!==status)throw new Error(`${name}: expected ${status}, got ${response.status}: ${await response.text()}`);return response;};
+await check('api',await fetch(`${base}/api`),200);
+await check('bootstrap',await fetch(`${base}/api/setup/bootstrap`,{method:'POST',headers:{Authorization:`Bearer ${token}`}}),201);
+const login=await check('login',await fetch(`${base}/api/auth/admin/login`,{method:'POST',headers:{'content-type':'application/json','cf-connecting-ip':'127.0.0.1'},body:JSON.stringify({email,password})}),200);
+const loginBody=await login.json();const access=loginBody.accessToken;const cookie=login.headers.get('set-cookie')?.split(';')[0];if(!access||!cookie)throw new Error('login credentials missing');
+await check('refresh',await fetch(`${base}/api/auth/refresh`,{method:'POST',headers:{cookie,origin:'https://app.mtechcare.com'}}),200);
+const requestBody={name:'Smoke Customer',mobile:'0500000000',device:'phone',deviceDisplayName:'Phone',locationType:'manual',location:'Riyadh',language:'en',dateTime:'2026-10-20',timestamp:'2026-10-20T08:00:00Z'};
+let created;for(let i=0;i<10;i++){const response=await check(`public create ${i+1}`,await fetch(`${base}/api/service-request`,{method:'POST',headers:{'content-type':'application/json','cf-connecting-ip':'203.0.113.10'},body:JSON.stringify({...requestBody,name:`Smoke Customer ${i+1}`})}),201);if(i===0)created=(await response.json()).data;}
+const limited=await check('public create limit',await fetch(`${base}/api/service-request`,{method:'POST',headers:{'content-type':'application/json','cf-connecting-ip':'203.0.113.10'},body:JSON.stringify(requestBody)}),429);if(!limited.headers.get('retry-after'))throw new Error('missing Retry-After');
+const auth={Authorization:`Bearer ${access}`,'content-type':'application/json'};
+await check('notification polling',await fetch(`${base}/api/notifications?after=0`,{headers:{Authorization:`Bearer ${access}`}}),200);
+await check('bill transaction',await fetch(`${base}/api/bill`,{method:'POST',headers:auth,body:JSON.stringify({serviceRequestId:created.id,costPrice:'10.00',sellingPrice:'20.00'})}),201);
+await check('invoice parent children',await fetch(`${base}/api/bill/invoice`,{method:'POST',headers:auth,body:JSON.stringify({invoiceDate:'2026-10-20',customerName:'Smoke Customer',serviceRequestId:created.id,items:[{product:'Part',quantity:2,unitPrice:10}]})}),201);
+await check('report',await fetch(`${base}/api/sales-report/invoice?startDate=2026-10-01&endDate=2026-10-31`,{headers:{Authorization:`Bearer ${access}`}}),200);
+await check('scheduled first',await fetch(`${base}/__scheduled?cron=0+5+*+*+*`),200);
+await check('scheduled idempotent',await fetch(`${base}/__scheduled?cron=0+5+*+*+*`),200);
+await check('logout',await fetch(`${base}/api/auth/logout`,{method:'POST',headers:{cookie,origin:'https://app.mtechcare.com'}}),200);
+console.log(JSON.stringify({api:true,bootstrap:true,loginRefreshLogout:true,publicLimit:true,notifications:true,bill:true,invoice:true,report:true,scheduledTwice:true}));

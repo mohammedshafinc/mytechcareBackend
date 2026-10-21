@@ -1,0 +1,25 @@
+name: Validate Cloudflare Worker
+on:
+  pull_request:
+  push:
+    branches-ignore: [main]
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run build
+      - run: npm run lint
+      - run: npm test -- --run
+      - run: npm run config:ci
+      - run: npm run db:migrate:local -- --config .wrangler-ci.jsonc --persist-to .tmp/ci-d1
+      - run: npx wrangler d1 execute DB --local --config .wrangler-ci.jsonc --persist-to .tmp/ci-d1 --command 'PRAGMA foreign_key_check;'
+      - run: npm run deploy:dry-run -- --config .wrangler-ci.jsonc

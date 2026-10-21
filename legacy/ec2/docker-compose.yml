@@ -6,10 +6,10 @@ services:
     ports:
       - "5433:5432"
     environment:
-      POSTGRES_USER: mtechcare
-      POSTGRES_PASSWORD: mtechcare123
-      POSTGRES_DB: mtechcare
-      TZ: Asia/Kolkata
+      POSTGRES_USER: REPLACE_WITH_LEGACY_USER
+      POSTGRES_PASSWORD: REPLACE_WITH_LEGACY_PASSWORD
+      POSTGRES_DB: REPLACE_WITH_LEGACY_DATABASE
+      TZ: Asia/Riyadh
     volumes:
       - postgres_data:/var/lib/postgresql/data
 

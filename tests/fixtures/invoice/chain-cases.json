@@ -1,0 +1,19 @@
+{
+  "seller": {"name":"Fixture Seller","vat":"300000000000003","cr":"1010000000","address":"Riyadh, Saudi Arabia"},
+  "cases": [
+    {
+      "name":"create-after-latest-delete",
+      "invoice":{"invoiceNumber":"INV-0100","invoiceDate":"2026-10-21","uuid":"11111111-1111-4111-8111-111111111111","icv":"100","issueTimestamp":"2026-10-21T08:00:00.000Z","customerName":"Fresh Chain Customer","customerVatNumber":"310000000000003","customerAddress":"Dammam & Riyadh","subtotal":200,"vatAmount":30,"grandTotal":230,"previousHash":"surviving-invoice-hash","items":[{"slNo":1,"product":"Replacement Screen","quantity":2,"unitPrice":100,"vatAmount":30,"lineTotal":230}]},
+      "expectedHash":"8cwX/6VpxxyujGVChrlFiSjRBqKTPtwu3LVsl27KAzs=",
+      "expectedQr":"AQ5GaXh0dXJlIFNlbGxlcgIPMzAwMDAwMDAwMDAwMDAzAxgyMDI2LTEwLTIxVDA4OjAwOjAwLjAwMFoEBjIzMC4wMAUFMzAuMDA=",
+      "expectedXmlSha256":"TwEcc0xdA3bVQ/FIV0FNoMmcSDr4S+j6ecr0JjWCy54="
+    },
+    {
+      "name":"latest-invoice-update",
+      "invoice":{"invoiceNumber":"INV-0101","invoiceDate":"2026-10-22","uuid":"22222222-2222-4222-8222-222222222222","icv":"101","issueTimestamp":"2026-10-22T09:15:00.000Z","customerName":"Updated Chain Customer","customerVatNumber":"320000000000003","customerAddress":"Jeddah <SA>","subtotal":300,"vatAmount":45,"grandTotal":345,"previousHash":"8cwX/6VpxxyujGVChrlFiSjRBqKTPtwu3LVsl27KAzs=","items":[{"slNo":1,"product":"Updated Mainboard","quantity":1,"unitPrice":300,"vatAmount":45,"lineTotal":345}]},
+      "expectedHash":"bwZVWKdIX/L77HHZShZYSXZzCA2KfNgllpVF7Sw7L7c=",
+      "expectedQr":"AQ5GaXh0dXJlIFNlbGxlcgIPMzAwMDAwMDAwMDAwMDAzAxgyMDI2LTEwLTIyVDA5OjE1OjAwLjAwMFoEBjM0NS4wMAUFNDUuMDA=",
+      "expectedXmlSha256":"6AB26TVBMXnKfIsbxEgkR6IqHNds98GRtIEfErGiGns="
+    }
+  ]
+}

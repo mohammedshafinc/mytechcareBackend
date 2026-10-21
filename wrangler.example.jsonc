@@ -1,0 +1,54 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "mytechcare-api-staging",
+  "main": "src/worker.ts",
+  "compatibility_date": "2025-09-15",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "observability": { "enabled": true, "logs": { "enabled": true, "invocation_logs": true } },
+  "triggers": { "crons": ["0 5 * * *"] },
+  "d1_databases": [{
+    "binding": "DB",
+    "database_name": "mytechcare-staging",
+    "database_id": "REPLACE_WITH_STAGING_D1_DATABASE_ID",
+    "migrations_dir": "migrations/d1"
+  }],
+  "vars": {
+    "APP_ENV": "staging",
+    "ALLOWED_ORIGINS": "https://REPLACE_WITH_VERCEL_STAGING_HOST",
+    "COOKIE_DOMAIN": "",
+    "COOKIE_SAME_SITE": "None",
+    "BUSINESS_TIME_ZONE": "Asia/Riyadh",
+    "REPORT_DEFAULT_DAYS": "30",
+    "REPORT_MAX_DAYS": "366",
+    "SELLER_NAME": "REPLACE_WITH_SELLER_NAME",
+    "SELLER_VAT_NUMBER": "REPLACE_WITH_SELLER_VAT_NUMBER",
+    "SELLER_CR_NUMBER": "REPLACE_WITH_SELLER_CR_NUMBER",
+    "SELLER_ADDRESS": "REPLACE_WITH_SELLER_ADDRESS"
+  },
+  "env": {
+    "production": {
+      "name": "mytechcare-api",
+      "workers_dev": true,
+      "d1_databases": [{
+        "binding": "DB",
+        "database_name": "mytechcare-production",
+        "database_id": "REPLACE_WITH_PRODUCTION_D1_DATABASE_ID",
+        "migrations_dir": "migrations/d1"
+      }],
+      "vars": {
+        "APP_ENV": "production",
+        "ALLOWED_ORIGINS": "https://app.mtechcare.com",
+        "COOKIE_DOMAIN": "",
+        "COOKIE_SAME_SITE": "Lax",
+        "BUSINESS_TIME_ZONE": "Asia/Riyadh",
+        "REPORT_DEFAULT_DAYS": "30",
+        "REPORT_MAX_DAYS": "366",
+        "SELLER_NAME": "REPLACE_WITH_SELLER_NAME",
+        "SELLER_VAT_NUMBER": "REPLACE_WITH_SELLER_VAT_NUMBER",
+        "SELLER_CR_NUMBER": "REPLACE_WITH_SELLER_CR_NUMBER",
+        "SELLER_ADDRESS": "REPLACE_WITH_SELLER_ADDRESS"
+      }
+    }
+  }
+}

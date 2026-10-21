@@ -1,0 +1,41 @@
+{
+  "verdict": "CHANGES_REQUESTED",
+  "findings": [
+    {
+      "id": 1,
+      "severity": "MEDIUM",
+      "location": "Worker lifecycle and Wrangler; Authentication, cookies, and bootstrap; deployment documentation",
+      "problem": "Refresh-cookie authentication is not browser-feasibility-guaranteed when a Vercel-hosted frontend calls workers.dev or api.mtechcare.com cross-site, because modern third-party-cookie blocking can prevent storage or sending despite correct CORS and SameSite=None.",
+      "fix": "Require a same-site custom frontend hostname such as app.mtechcare.com with api.mtechcare.com, prefer an API host-only refresh cookie, and gate cutover on a real-browser login/reload/refresh/logout test; otherwise separately design a non-cookie refresh and CSRF model."
+    },
+    {
+      "id": 2,
+      "severity": "MEDIUM",
+      "location": "Password feasibility and login abuse control amendment; public service-request routes",
+      "problem": "The design asserts a separate public-service-request rate bucket but does not define endpoint coverage, operation-specific keys, thresholds, windows, Retry-After, cleanup, or whether blocked calls avoid service-request D1 operations.",
+      "fix": "Specify and test distinct HMAC operation buckets and exact limits for both POST /api/service-request and GET /api/service-request/by-mobile, pre-domain-operation generic 429 behavior, bounded expiry cleanup, concurrency, and bucket separation."
+    },
+    {
+      "id": 3,
+      "severity": "MEDIUM",
+      "location": "Persistent notification polling",
+      "problem": "One global cursor combined with current-permission filtering can skip an event forever when mixed event types advance the cursor and the admin later gains permission to the skipped type.",
+      "fix": "Either persist fixed-at-publication per-admin notification recipients (recommended) or maintain separate persisted cursors per typed permission stream; define and test permission grant/revoke/regrant and account lifecycle behavior across three admins."
+    },
+    {
+      "id": 4,
+      "severity": "NIT",
+      "location": "Fresh D1 schema contract date and TS macros",
+      "problem": "Real DATE and canonical UTC RFC3339 storage are required but the exact canonical timestamp form and implementable SQLite checks are not defined.",
+      "fix": "Lock DATE to YYYY-MM-DD with shared Gregorian validation and TS to 24-byte Date.toISOString output, specify SQL shape checks, and test leap days, impossible dates, offset normalization, and round trips."
+    },
+    {
+      "id": 5,
+      "severity": "NIT",
+      "location": "Password feasibility and login abuse control amendment",
+      "problem": "The process-constant dummy v1 password record could be interpreted as a literal source-controlled hash, conflicting with broad no-password/hash repository hygiene.",
+      "fix": "Generate random dummy salt and comparison bytes at isolate initialization, construct the record only in memory, never log/snapshot it, and test equal derivation work for unknown accounts."
+    }
+  ],
+  "reviewDoc": "/home/shafin/Downloads/mtc admin BE/mytechcareBackend/.agents/tasks/cloudflare-migration/design-review.md"
+}

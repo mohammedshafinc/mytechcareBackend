@@ -1,0 +1,2 @@
+import { hashPassword, verifyPassword } from '../src/worker/password';
+const samples:number[]=[];const password='Local-only benchmark password 123!';let record='';for(let i=0;i<3;i++){const start=performance.now();record=await hashPassword(password);await verifyPassword(password,record);samples.push(performance.now()-start);}samples.sort((a,b)=>a-b);console.log(JSON.stringify({runtime:'local-node',rounds:samples.length,medianMs:samples[1],p95Ms:samples[2],maxMs:samples[2],releaseGate:'Deployed Workers CPU remains unverified; do not weaken PBKDF2.'}));

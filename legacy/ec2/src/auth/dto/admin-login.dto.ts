@@ -11,7 +11,7 @@ export class AdminLoginDto {
   email: string;
 
   @ApiProperty({
-    example: 'password123',
+    example: 'REPLACE_WITH_PASSWORD',
     description: 'Admin password',
   })
   @IsNotEmpty()

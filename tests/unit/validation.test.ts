@@ -1,0 +1,3 @@
+import { describe,expect,it } from 'vitest';
+import { date,money,riyadhDate,timestamp } from '../../src/worker/http';
+describe('Worker boundary validation',()=>{it('validates Gregorian dates',()=>{expect(date('2024-02-29')).toBe('2024-02-29');expect(()=>date('2023-02-29')).toThrow();expect(()=>date('2024-02-30')).toThrow();});it('normalizes RFC3339 timestamps',()=>{expect(timestamp('2025-01-01T03:00:00+03:00')).toBe('2025-01-01T00:00:00.000Z');expect(timestamp('2025-01-01T00:00:00Z')).toBe('2025-01-01T00:00:00.000Z');});it('maps money exactly',()=>{expect(money('19.99')).toBe(1999);expect(()=>money('1.001')).toThrow();});it('uses Riyadh at year boundary',()=>expect(riyadhDate(new Date('2026-12-31T21:00:00.000Z'))).toBe('2027-01-01'));});
