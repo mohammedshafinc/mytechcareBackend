@@ -32,7 +32,9 @@ export function parseEnv(env: Env): Config {
   const origins = new Set<string>();
   for (const value of values) {
     const u = new URL(value);
-    if (u.protocol !== 'https:' || u.origin !== value || u.username || u.password || origins.has(value)) throw new Error('configuration_unavailable');
+    // Plain-HTTP origins are allowed only for loopback dev servers outside production.
+    const localDev = env.APP_ENV !== 'production' && u.protocol === 'http:' && (u.hostname === 'localhost' || u.hostname === '127.0.0.1');
+    if ((u.protocol !== 'https:' && !localDev) || u.origin !== value || u.username || u.password || origins.has(value)) throw new Error('configuration_unavailable');
     if (env.APP_ENV === 'production' && !(u.hostname === 'mtechcare.com' || u.hostname.endsWith('.mtechcare.com'))) throw new Error('configuration_unavailable');
     origins.add(value);
   }

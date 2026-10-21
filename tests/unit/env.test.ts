@@ -4,6 +4,13 @@ const base={DB:{} as D1Database,APP_ENV:'production',ALLOWED_ORIGINS:'https://ap
 describe('environment',()=>{
   it('accepts exact same-site production origin',()=>expect(parseEnv({...base}).origins.has('https://app.mtechcare.com')).toBe(true));
   it('rejects wildcard and vercel-only production origin',()=>{expect(()=>parseEnv({...base,ALLOWED_ORIGINS:'*'})).toThrow();expect(()=>parseEnv({...base,ALLOWED_ORIGINS:'https://x.vercel.app'})).toThrow();});
+  it('allows plain-HTTP loopback origins only outside production',()=>{
+    const staging={...base,APP_ENV:'staging',COOKIE_SAME_SITE:'None'};
+    expect(parseEnv({...staging,ALLOWED_ORIGINS:'https://admin.mtechcare.com,http://localhost:3000'}).origins.has('http://localhost:3000')).toBe(true);
+    expect(parseEnv({...staging,ALLOWED_ORIGINS:'http://127.0.0.1:5173'}).origins.has('http://127.0.0.1:5173')).toBe(true);
+    expect(()=>parseEnv({...staging,ALLOWED_ORIGINS:'http://evil.example'})).toThrow();
+    expect(()=>parseEnv({...base,ALLOWED_ORIGINS:'https://app.mtechcare.com,http://localhost:3000'})).toThrow();
+  });
   it('rejects unknown environments, non-host-only cookies, and missing or placeholder seller identity',()=>{
     expect(()=>parseEnv({...base,APP_ENV:'prodution'})).toThrow();
     expect(()=>parseEnv({...base,COOKIE_DOMAIN:'.mtechcare.com'})).toThrow();
