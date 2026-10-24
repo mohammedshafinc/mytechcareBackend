@@ -11,6 +11,11 @@ describe('environment',()=>{
     expect(()=>parseEnv({...staging,ALLOWED_ORIGINS:'http://evil.example'})).toThrow();
     expect(()=>parseEnv({...base,ALLOWED_ORIGINS:'https://app.mtechcare.com,http://localhost:3000'})).toThrow();
   });
+  it('allows SameSite None or Lax in production and rejects anything else',()=>{
+    expect(parseEnv({...base,COOKIE_SAME_SITE:'None'}).COOKIE_SAME_SITE).toBe('None');
+    expect(parseEnv({...base,COOKIE_SAME_SITE:'Lax'}).COOKIE_SAME_SITE).toBe('Lax');
+    for(const value of ['Strict','none','','Lax; Domain=x'])expect(()=>parseEnv({...base,COOKIE_SAME_SITE:value}),value).toThrow();
+  });
   it('rejects unknown environments, non-host-only cookies, and missing or placeholder seller identity',()=>{
     expect(()=>parseEnv({...base,APP_ENV:'prodution'})).toThrow();
     expect(()=>parseEnv({...base,COOKIE_DOMAIN:'.mtechcare.com'})).toThrow();

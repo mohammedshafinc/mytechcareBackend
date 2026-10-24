@@ -15,6 +15,7 @@ import { runDailyExpiry } from './expiry';
 import { createExpense, createRental, createVehicle, deleteExpense, deleteRental, deleteVehicle, getRental, getVehicle, listExpenses, listRentals, listVehicles, returnRental, updateExpense, updateRental, updateVehicle, vehicleReport } from './organization';
 import { buildReport } from './reports';
 import { createSale, deleteSale, getSale, listSales, nextSaleNumber, salesReport, updateSale } from './telecom';
+import { adjustStock, createProduct, deleteProduct, getProduct, inventoryReport, listCategories, listMovements, listProducts, listStock, listTelecomSaleProducts, nextSku, transferStock, updateProduct } from './inventory';
 
 type Vars={config:Config;claims:Claims;requestId:string};
 type AppBindings={Bindings:Env;Variables:Vars};
@@ -204,9 +205,28 @@ const telecomSales=[auth,requirePermission('TELECOM','TELECOM_SALES')] as const;
 app.get('/api/telecom/sales',...telecomSales,async c=>c.json(await listSales(c.get('config').DB,c.get('claims'),name=>c.req.query(name))));
 app.post('/api/telecom/sales',...telecomSales,async c=>c.json(await createSale(c.get('config').DB,c.get('claims'),await jsonBody(c)),201));
 app.get('/api/telecom/sales/next-number',...telecomSales,async c=>c.json(await nextSaleNumber(c.get('config').DB)));
+app.get('/api/telecom/sales/products',...telecomSales,async c=>c.json(await listTelecomSaleProducts(c.get('config').DB,c.get('claims'),name=>c.req.query(name))));
 app.get('/api/telecom/sales/:id',...telecomSales,async c=>c.json(await getSale(c.get('config').DB,c.get('claims'),id(c.req.param('id')))));
 app.put('/api/telecom/sales/:id',...telecomSales,async c=>c.json(await updateSale(c.get('config').DB,c.get('claims'),id(c.req.param('id')),await jsonBody(c))));
 app.delete('/api/telecom/sales/:id',...telecomSales,async c=>c.json(await deleteSale(c.get('config').DB,c.get('claims'),id(c.req.param('id')))));
+// Inventory: products (any inventory submodule may read), stock (INVENTORY_STOCK), report (INVENTORY_REPORTS).
+function requireAnyPermission(module:string,submodules:string[]):MiddlewareHandler<AppBindings>{return async(c,next)=>{const x=c.get('claims');if(x.kind!=='admin')throw new HttpError(403,'Forbidden');if(x.role!=='SUPER_ADMIN'&&(!x.modules?.includes(module)||!submodules.some(s=>x.submodules?.includes(s))))throw new HttpError(403,'Forbidden');if(x.viewOnly&&c.req.method!=='GET')throw new HttpError(403,'Forbidden');await next();};}
+const inventoryRead=[auth,requireAnyPermission('INVENTORY',['INVENTORY_PRODUCTS','INVENTORY_STOCK','INVENTORY_REPORTS'])] as const;
+const inventoryProducts=[auth,requirePermission('INVENTORY','INVENTORY_PRODUCTS')] as const;
+const inventoryStock=[auth,requirePermission('INVENTORY','INVENTORY_STOCK')] as const;
+const q=(c:Context<AppBindings>)=>(name:string)=>c.req.query(name);
+app.get('/api/inventory/products',...inventoryRead,async c=>c.json(await listProducts(c.get('config').DB,c.get('claims'),q(c))));
+app.post('/api/inventory/products',...inventoryProducts,async c=>c.json(await createProduct(c.get('config').DB,c.get('claims'),await jsonBody(c)),201));
+app.get('/api/inventory/products/next-sku',...inventoryProducts,async c=>c.json(await nextSku(c.get('config').DB,q(c))));
+app.get('/api/inventory/products/:id',...inventoryRead,async c=>c.json(await getProduct(c.get('config').DB,c.get('claims'),id(c.req.param('id')))));
+app.put('/api/inventory/products/:id',...inventoryProducts,async c=>c.json(await updateProduct(c.get('config').DB,c.get('claims'),id(c.req.param('id')),await jsonBody(c))));
+app.delete('/api/inventory/products/:id',...inventoryProducts,async c=>c.json(await deleteProduct(c.get('config').DB,id(c.req.param('id')))));
+app.get('/api/inventory/categories',...inventoryRead,async c=>c.json(await listCategories(c.get('config').DB,q(c))));
+app.get('/api/inventory/stock',...inventoryStock,async c=>c.json(await listStock(c.get('config').DB,c.get('claims'),q(c))));
+app.post('/api/inventory/stock/adjust',...inventoryStock,async c=>c.json(await adjustStock(c.get('config').DB,c.get('claims'),await jsonBody(c)),201));
+app.post('/api/inventory/stock/transfer',...inventoryStock,async c=>c.json(await transferStock(c.get('config').DB,c.get('claims'),await jsonBody(c)),201));
+app.get('/api/inventory/movements',...inventoryStock,async c=>c.json(await listMovements(c.get('config').DB,c.get('claims'),q(c))));
+app.get('/api/inventory/reports/summary',auth,requirePermission('INVENTORY','INVENTORY_REPORTS'),async c=>c.json(await inventoryReport(c.get('config').DB,c.get('claims'),q(c))));
 app.get('/api/telecom/reports/sales',auth,requirePermission('TELECOM','TELECOM_REPORTS'),async c=>c.json(await salesReport(c.get('config').DB,c.get('claims'),name=>c.req.query(name))));
 app.put('/api/organization/rental-vehicles/:id/return',auth,requirePermission('ORGANIZATION','RENTAL_VEHICLES'),async c=>c.json(await returnRental(c.get('config').DB,c.get('claims'),id(c.req.param('id')),await jsonBody(c))));
 

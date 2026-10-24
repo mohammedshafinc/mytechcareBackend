@@ -38,7 +38,9 @@ export function parseEnv(env: Env): Config {
     if (env.APP_ENV === 'production' && !(u.hostname === 'mtechcare.com' || u.hostname.endsWith('.mtechcare.com'))) throw new Error('configuration_unavailable');
     origins.add(value);
   }
-  if (!origins.size || (env.APP_ENV === 'production' && (env.COOKIE_DOMAIN !== '' || env.COOKIE_SAME_SITE !== 'Lax'))) throw new Error('configuration_unavailable');
+  // Production allows Lax (same-site API host) or None (API on workers.dev, cross-site). Cookies are always Secure outside local.
+  if (!['Lax', 'None', 'Strict'].includes(env.COOKIE_SAME_SITE)) throw new Error('configuration_unavailable');
+  if (!origins.size || (env.APP_ENV === 'production' && (env.COOKIE_DOMAIN !== '' || !['Lax', 'None'].includes(env.COOKIE_SAME_SITE)))) throw new Error('configuration_unavailable');
   const reportDefaultDays = Number(env.REPORT_DEFAULT_DAYS);
   const reportMaxDays = Number(env.REPORT_MAX_DAYS);
   if (!Number.isInteger(reportDefaultDays) || !Number.isInteger(reportMaxDays) || reportDefaultDays < 1 || reportMaxDays > 366 || reportDefaultDays > reportMaxDays) throw new Error('configuration_unavailable');

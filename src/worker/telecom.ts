@@ -1,71 +1,71 @@
 // Telecom module: sales bills (TELECOM_SALES) and the sales report (TELECOM_REPORTS).
 // Money is accepted and returned in SAR and stored as integer halalas.
+// Bill items may reference an inventory product (TELECOM / SALES only). Stock-tracked products are
+// deducted from the bill's store. Editing, cancelling or deleting a bill rebalances stock from the
+// bill's recorded movement history.
 import { chunkRows } from './bulk';
-import { all, batch, one, placeholders } from './db';
-import { HttpError, camel, date, id, money, nowIso, riyadhDate } from './http';
+import { all, one, placeholders } from './db';
+import { HttpError, camel, date, id, nowIso, riyadhDate } from './http';
 import type { Claims } from './jwt';
 import { reportRange } from './reports';
+import { MAX_HALALAS, actorStore, likePattern, oneOf, optionalId, optionalText, pageQuery, rejectUnknown, sar, type Query } from './common';
+import { assertStockAvailable, productsByIds, recordedSaleStock, runStockBatch, saleStockChanges, stockStatements, type StockChange } from './inventory';
 
-const MAX_HALALAS = 9_999_999_999;
 export const PAYMENT_METHODS = ['CASH', 'CARD', 'BANK_TRANSFER', 'ONLINE', 'OTHER'] as const;
 export const SALE_STATUSES = ['PAID', 'PENDING', 'CANCELLED'] as const;
 export const ITEM_CATEGORIES = ['MOBILE', 'ACCESSORY', 'SIM', 'RECHARGE', 'SERVICE', 'OTHER'] as const;
 const CREATE_FIELDS = ['saleDate', 'customerName', 'customerMobile', 'paymentMethod', 'status', 'storeId', 'staffId', 'discount', 'vatRate', 'notes', 'items'];
-const ITEM_FIELDS = ['product', 'category', 'imei', 'quantity', 'unitPrice', 'unitCost'];
+const ITEM_FIELDS = ['productId', 'product', 'category', 'imei', 'quantity', 'unitPrice', 'unitCost'];
 
-interface SaleItem { sl: number; product: string; category: string; imei: string | null; quantity: number; unitPrice: number; unitCost: number; lineTotal: number }
+interface RawItem { sl: number; productId: number | null; product: string | null; category: string | null; imei: string | null; quantity: number; unitPrice: number | undefined; unitCost: number | undefined }
+interface SaleItem { sl: number; productId: number | null; tracked: boolean; product: string; category: string; imei: string | null; quantity: number; unitPrice: number; unitCost: number; lineTotal: number }
 interface Totals { subtotal: number; discount: number; vatBps: number; vat: number; grand: number; cost: number }
 
-// ---------- validation helpers ----------
-function rejectUnknown(body: Record<string, unknown>, allowed: readonly string[], label = 'field') {
-  for (const key of Object.keys(body)) if (!allowed.includes(key)) throw new HttpError(400, `Unknown ${label}: ${key}`);
-}
-function optionalText(value: unknown, name: string, max: number): string | null | undefined {
-  if (value === undefined) return undefined;
-  if (value === null || value === '') return null;
-  if (typeof value !== 'string' || new TextEncoder().encode(value).length > max) throw new HttpError(400, `Invalid ${name}`);
-  return value.trim() || null;
-}
-function sar(value: unknown, name: string): number {
-  if (typeof value !== 'number' && typeof value !== 'string') throw new HttpError(400, `Invalid ${name}`);
-  let halalas: number;
-  try { halalas = money(value); } catch { throw new HttpError(400, `Invalid ${name}`); }
-  if (halalas > MAX_HALALAS) throw new HttpError(400, `${name} exceeds the money limit`);
-  return halalas;
-}
-function oneOf<T extends string>(value: unknown, name: string, allowed: readonly T[]): T {
-  if (typeof value !== 'string' || !allowed.includes(value.toUpperCase() as T)) throw new HttpError(400, `${name} must be one of ${allowed.join(', ')}`);
-  return value.toUpperCase() as T;
-}
-function optionalId(value: unknown, name: string): number | null | undefined {
-  if (value === undefined) return undefined;
-  if (value === null || value === '') return null;
-  if (typeof value !== 'number' && typeof value !== 'string') throw new HttpError(400, `Invalid ${name}`);
-  try { return id(String(value)); } catch { throw new HttpError(400, `Invalid ${name}`); }
-}
+// ---------- validation ----------
 function vatBps(value: unknown): number {
   const n = typeof value === 'string' ? Number(value) : value;
   if (typeof n !== 'number' || !Number.isFinite(n) || n < 0 || n > 100 || !/^\d+(?:\.\d{1,2})?$/.test(String(value))) throw new HttpError(400, 'vatRate must be a percentage between 0 and 100');
   return Math.round(n * 100);
 }
-function parseItems(value: unknown): SaleItem[] {
+const blank = (value: unknown) => value === undefined || value === null || value === '';
+function parseItems(value: unknown): RawItem[] {
   if (!Array.isArray(value) || value.length === 0) throw new HttpError(400, 'items must be a non-empty array');
   if (value.length > 100) throw new HttpError(400, 'A bill can contain at most 100 items');
   return value.map((raw, index) => {
-    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new HttpError(400, `Invalid item ${index + 1}`);
+    const n = index + 1;
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new HttpError(400, `Invalid item ${n}`);
     const item = raw as Record<string, unknown>;
     rejectUnknown(item, ITEM_FIELDS, 'item field');
-    const product = optionalText(item.product, 'product', 255);
-    if (!product) throw new HttpError(400, `Item ${index + 1}: product is required`);
+    const productId = optionalId(item.productId, 'productId') ?? null, product = optionalText(item.product, 'product', 255) ?? null;
+    if (!product && productId === null) throw new HttpError(400, `Item ${n}: product or productId is required`);
     const quantity = item.quantity === undefined ? 1 : Number(item.quantity);
-    if (!Number.isInteger(quantity) || quantity < 1 || quantity > 1000) throw new HttpError(400, `Item ${index + 1}: quantity must be an integer between 1 and 1000`);
-    if (item.unitPrice === undefined) throw new HttpError(400, `Item ${index + 1}: unitPrice is required`);
-    const unitPrice = sar(item.unitPrice, 'unitPrice');
-    const unitCost = item.unitCost === undefined || item.unitCost === null || item.unitCost === '' ? 0 : sar(item.unitCost, 'unitCost');
-    const lineTotal = unitPrice * quantity;
-    if (lineTotal > MAX_HALALAS || unitCost * quantity > MAX_HALALAS) throw new HttpError(400, `Item ${index + 1}: line total exceeds the money limit`);
-    const category = item.category === undefined || item.category === null || item.category === '' ? 'OTHER' : oneOf(item.category, 'category', ITEM_CATEGORIES);
-    return { sl: index + 1, product, category, imei: optionalText(item.imei, 'imei', 50) ?? null, quantity, unitPrice, unitCost, lineTotal };
+    if (!Number.isInteger(quantity) || quantity < 1 || quantity > 1000) throw new HttpError(400, `Item ${n}: quantity must be an integer between 1 and 1000`);
+    const unitPrice = blank(item.unitPrice) ? undefined : sar(item.unitPrice, 'unitPrice');
+    if (unitPrice === undefined && productId === null) throw new HttpError(400, `Item ${n}: unitPrice is required`);
+    return {
+      sl: n, productId, product, quantity, unitPrice,
+      unitCost: blank(item.unitCost) ? undefined : sar(item.unitCost, 'unitCost'),
+      category: blank(item.category) ? null : oneOf(item.category, 'category', ITEM_CATEGORIES),
+      imei: optionalText(item.imei, 'imei', 50) ?? null,
+    };
+  });
+}
+/** Fills product defaults (name, price, cost) and enforces that linked products are TELECOM / SALES. */
+async function resolveItems(db: D1Database, raw: RawItem[], allowInactive: Set<number>): Promise<SaleItem[]> {
+  const ids = raw.flatMap(r => r.productId === null ? [] : [r.productId]);
+  const products = ids.length ? await productsByIds(db, ids) : new Map();
+  return raw.map(r => {
+    let name = r.product, unitPrice = r.unitPrice, unitCost = r.unitCost, tracked = false;
+    if (r.productId !== null) {
+      const p = products.get(r.productId);
+      if (!p) throw new HttpError(404, `Item ${r.sl}: product ${r.productId} not found`);
+      if (p.company !== 'TELECOM' || p.division !== 'SALES') throw new HttpError(400, `Item ${r.sl}: ${p.name} is not a Telecom Sales product`);
+      if (p.is_active !== 1 && !allowInactive.has(p.id)) throw new HttpError(400, `Item ${r.sl}: ${p.name} is inactive`);
+      name = name ?? p.name; unitPrice = unitPrice ?? p.selling_price_halalas; unitCost = unitCost ?? p.cost_price_halalas; tracked = p.track_stock === 1;
+    }
+    const price = unitPrice as number, cost = unitCost ?? 0, lineTotal = price * r.quantity;
+    if (lineTotal > MAX_HALALAS || cost * r.quantity > MAX_HALALAS) throw new HttpError(400, `Item ${r.sl}: line total exceeds the money limit`);
+    return { sl: r.sl, productId: r.productId, tracked, product: name as string, category: r.category ?? 'OTHER', imei: r.imei, quantity: r.quantity, unitPrice: price, unitCost: cost, lineTotal };
   });
 }
 function computeTotals(subtotal: number, cost: number, discount: number, bps: number): Totals {
@@ -75,15 +75,19 @@ function computeTotals(subtotal: number, cost: number, discount: number, bps: nu
   return { subtotal, discount, vatBps: bps, vat, grand, cost };
 }
 const sumItems = (items: SaleItem[]) => ({ subtotal: items.reduce((s, i) => s + i.lineTotal, 0), cost: items.reduce((s, i) => s + i.unitCost * i.quantity, 0) });
-
-// ---------- store scoping ----------
-// SUPER_ADMIN sees every store. Other admins assigned to a store are limited to it.
-// Admins without an assigned store are not store-restricted.
-async function actorStore(db: D1Database, claims: Claims): Promise<number | null> {
-  if (claims.role === 'SUPER_ADMIN') return null;
-  const actor = await one<{ store_id: number | null }>(db.prepare('SELECT store_id FROM admin_users WHERE id=?').bind(claims.sub));
-  return actor?.store_id ?? null;
+/** Quantity a bill should hold out of stock, per product and store. Cancelled bills hold nothing. */
+function desiredStock(items: Array<{ productId: number | null; quantity: number; tracked: boolean }>, status: string, storeId: number | null) {
+  const out = new Map<string, { productId: number; storeId: number; qty: number }>();
+  if (status === 'CANCELLED') return out;
+  for (const item of items) {
+    if (!item.tracked || item.productId === null) continue;
+    if (storeId === null) throw new HttpError(400, 'storeId is required when the bill contains stock-tracked inventory products');
+    const key = `${item.productId}:${storeId}`, entry = out.get(key);
+    if (entry) entry.qty += item.quantity; else out.set(key, { productId: item.productId, storeId, qty: item.quantity });
+  }
+  return out;
 }
+
 async function checkReferences(db: D1Database, storeId: number | null, staffId: number | null) {
   if (storeId !== null && !await one(db.prepare('SELECT id FROM stores WHERE id=?').bind(storeId))) throw new HttpError(404, 'Store not found');
   if (staffId !== null) {
@@ -97,12 +101,12 @@ async function checkReferences(db: D1Database, storeId: number | null, staffId: 
 function itemStatements(db: D1Database, saleKey: { id: number } | { billNumber: string }, items: SaleItem[]) {
   const statements: D1PreparedStatement[] = [];
   const lookup = 'id' in saleKey ? 'id=?' : 'bill_number=?';
-  for (const chunk of chunkRows(items, 1, 8)) {
+  for (const chunk of chunkRows(items, 1, 9)) {
     const values: unknown[] = ['id' in saleKey ? saleKey.id : saleKey.billNumber];
-    for (const i of chunk) values.push(i.sl, i.product, i.category, i.imei, i.quantity, i.unitPrice, i.unitCost, i.lineTotal);
+    for (const i of chunk) values.push(i.sl, i.productId, i.product, i.category, i.imei, i.quantity, i.unitPrice, i.unitCost, i.lineTotal);
     statements.push(db.prepare(
-      `WITH p(id) AS (SELECT id FROM telecom_sales WHERE ${lookup}), r(sl_no,product,category,imei,quantity,unit_price_halalas,unit_cost_halalas,line_total_halalas) AS (VALUES ${chunk.map(() => '(?,?,?,?,?,?,?,?)').join(',')}) ` +
-      'INSERT INTO telecom_sale_items(sale_id,sl_no,product,category,imei,quantity,unit_price_halalas,unit_cost_halalas,line_total_halalas) SELECT (SELECT id FROM p),* FROM r'
+      `WITH p(id) AS (SELECT id FROM telecom_sales WHERE ${lookup}), r(sl_no,product_id,product,category,imei,quantity,unit_price_halalas,unit_cost_halalas,line_total_halalas) AS (VALUES ${chunk.map(() => '(?,?,?,?,?,?,?,?,?)').join(',')}) ` +
+      'INSERT INTO telecom_sale_items(sale_id,sl_no,product_id,product,category,imei,quantity,unit_price_halalas,unit_cost_halalas,line_total_halalas) SELECT (SELECT id FROM p),* FROM r'
     ).bind(...values));
   }
   return statements;
@@ -136,16 +140,14 @@ export async function getSale(db: D1Database, claims: Claims, saleId: number) {
   return { success: true, message: 'Sale fetched successfully', data: publicSale(row, items) };
 }
 
-export async function listSales(db: D1Database, claims: Claims, query: (name: string) => string | undefined) {
-  const page = Number(query('page') ?? 1), limit = Number(query('limit') ?? 20);
-  if (!Number.isInteger(page) || page < 1 || !Number.isInteger(limit) || limit < 1 || limit > 100) throw new HttpError(400, 'Invalid pagination');
+export async function listSales(db: D1Database, claims: Claims, query: Query) {
+  const { page, limit, offset } = pageQuery(query);
   const clauses: string[] = [], bindings: unknown[] = [];
   const scope = await actorStore(db, claims);
   if (scope !== null) { clauses.push('s.store_id=?'); bindings.push(scope); }
   const search = query('search');
-  if (search !== undefined && search !== '') {
-    if (new TextEncoder().encode(search).length > 50) throw new HttpError(400, 'Invalid search');
-    const pattern = `%${search.toLowerCase().replace(/[\\%_]/g, '\\$&')}%`;
+  if (search) {
+    const pattern = likePattern(search);
     clauses.push("(lower(s.bill_number) LIKE ? ESCAPE '\\' OR lower(coalesce(s.customer_name,'')) LIKE ? ESCAPE '\\' OR lower(coalesce(s.customer_mobile,'')) LIKE ? ESCAPE '\\' OR EXISTS (SELECT 1 FROM telecom_sale_items i WHERE i.sale_id=s.id AND (lower(i.product) LIKE ? ESCAPE '\\' OR lower(coalesce(i.imei,'')) LIKE ? ESCAPE '\\')))");
     bindings.push(pattern, pattern, pattern, pattern, pattern);
   }
@@ -159,7 +161,7 @@ export async function listSales(db: D1Database, claims: Claims, query: (name: st
   if (storeId) { clauses.push('s.store_id=?'); bindings.push(id(storeId)); }
   const where = clauses.length ? ` WHERE ${clauses.join(' AND ')}` : '';
   const total = (await one<{ n: number }>(db.prepare(`SELECT count(*) n FROM telecom_sales s${where}`).bind(...bindings)))?.n ?? 0;
-  const rows = await all<Record<string, unknown>>(db.prepare(`${saleSelect}${where} ORDER BY s.sale_date DESC,s.id DESC LIMIT ? OFFSET ?`).bind(...bindings, limit, (page - 1) * limit));
+  const rows = await all<Record<string, unknown>>(db.prepare(`${saleSelect}${where} ORDER BY s.sale_date DESC,s.id DESC LIMIT ? OFFSET ?`).bind(...bindings, limit, offset));
   const ids = rows.map(r => Number(r.id));
   const items = ids.length ? await all<Record<string, unknown>>(db.prepare(`SELECT * FROM telecom_sale_items WHERE sale_id IN (${placeholders(ids.length)}) ORDER BY sale_id,sl_no`).bind(...ids)) : [];
   return {
@@ -170,23 +172,26 @@ export async function listSales(db: D1Database, claims: Claims, query: (name: st
 
 export async function createSale(db: D1Database, claims: Claims, body: Record<string, unknown>) {
   rejectUnknown(body, CREATE_FIELDS);
-  const items = parseItems(body.items), sums = sumItems(items);
-  const totals = computeTotals(sums.subtotal, sums.cost, body.discount === undefined || body.discount === null || body.discount === '' ? 0 : sar(body.discount, 'discount'), body.vatRate === undefined ? 1500 : vatBps(body.vatRate));
+  const items = await resolveItems(db, parseItems(body.items), new Set()), sums = sumItems(items);
+  const totals = computeTotals(sums.subtotal, sums.cost, blank(body.discount) ? 0 : sar(body.discount, 'discount'), body.vatRate === undefined ? 1500 : vatBps(body.vatRate));
   const scope = await actorStore(db, claims);
   let storeId = optionalId(body.storeId, 'storeId') ?? null;
   if (scope !== null) { if (storeId !== null && storeId !== scope) throw new HttpError(403, 'Access denied: you do not have access to this store'); storeId = scope; }
   const staffId = optionalId(body.staffId, 'staffId') ?? null;
   await checkReferences(db, storeId, staffId);
-  const saleDate = body.saleDate === undefined || body.saleDate === null || body.saleDate === '' ? riyadhDate(new Date()) : date(body.saleDate);
+  const saleDate = blank(body.saleDate) ? riyadhDate(new Date()) : date(body.saleDate);
   const paymentMethod = body.paymentMethod === undefined ? 'CASH' : oneOf(body.paymentMethod, 'paymentMethod', PAYMENT_METHODS);
   const status = body.status === undefined ? 'PAID' : oneOf(body.status, 'status', SALE_STATUSES);
+  const changes = saleStockChanges(desiredStock(items, status, storeId), [], null, 'Telecom sale');
+  await assertStockAvailable(db, changes);
   const counterRow = await one<{ value: number }>(db.prepare("UPDATE telecom_counters SET next_value=next_value+1,updated_at=? WHERE kind='telecom-sale' AND next_value<2147483647 RETURNING next_value-1 AS value").bind(nowIso()));
   if (!counterRow) throw new HttpError(409, 'Sequence exhausted', 'sequence_exhausted');
   const billNumber = `TS-${String(counterRow.value).padStart(4, '0')}`, created = nowIso();
+  for (const change of changes) change.notes = `Telecom sale ${billNumber}`;
   const insert = db.prepare('INSERT INTO telecom_sales(bill_number,sale_date,customer_name,customer_mobile,payment_method,status,store_id,staff_id,subtotal_halalas,discount_halalas,vat_rate_bps,vat_amount_halalas,grand_total_halalas,cost_total_halalas,notes,created_by,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
     .bind(billNumber, saleDate, optionalText(body.customerName, 'customerName', 255) ?? null, optionalText(body.customerMobile, 'customerMobile', 50) ?? null, paymentMethod, status, storeId, staffId,
       totals.subtotal, totals.discount, totals.vatBps, totals.vat, totals.grand, totals.cost, optionalText(body.notes, 'notes', 10000) ?? null, claims.sub, created, created);
-  await batch(db, [insert, ...itemStatements(db, { billNumber }, items)]);
+  await runStockBatch(db, [insert, ...itemStatements(db, { billNumber }, items), ...stockStatements(db, changes, claims.sub, created, billNumber)], changes);
   const row = await one<{ id: number }>(db.prepare('SELECT id FROM telecom_sales WHERE bill_number=?').bind(billNumber));
   if (!row) throw new HttpError(500, 'Sale creation failed');
   return { ...(await getSale(db, claims, row.id)), message: 'Sale created successfully' };
@@ -199,12 +204,13 @@ export async function updateSale(db: D1Database, claims: Claims, saleId: number,
   const assignments: string[] = [], values: unknown[] = [];
   const set = (column: string, value: unknown) => { assignments.push(`${column}=?`); values.push(value); };
 
-  if (body.saleDate !== undefined) { if (body.saleDate === null || body.saleDate === '') throw new HttpError(400, 'saleDate cannot be cleared'); set('sale_date', date(body.saleDate)); }
+  if (body.saleDate !== undefined) { if (blank(body.saleDate)) throw new HttpError(400, 'saleDate cannot be cleared'); set('sale_date', date(body.saleDate)); }
   if (body.customerName !== undefined) set('customer_name', optionalText(body.customerName, 'customerName', 255));
   if (body.customerMobile !== undefined) set('customer_mobile', optionalText(body.customerMobile, 'customerMobile', 50));
   if (body.notes !== undefined) set('notes', optionalText(body.notes, 'notes', 10000));
   if (body.paymentMethod !== undefined) set('payment_method', oneOf(body.paymentMethod, 'paymentMethod', PAYMENT_METHODS));
-  if (body.status !== undefined) set('status', oneOf(body.status, 'status', SALE_STATUSES));
+  let status = String(current.status);
+  if (body.status !== undefined) { status = oneOf(body.status, 'status', SALE_STATUSES); set('status', status); }
 
   let storeId = current.store_id as number | null, staffId = current.staff_id as number | null;
   if (body.storeId !== undefined) {
@@ -215,24 +221,41 @@ export async function updateSale(db: D1Database, claims: Claims, saleId: number,
   if (body.staffId !== undefined) { staffId = optionalId(body.staffId, 'staffId') ?? null; set('staff_id', staffId); }
   if (body.storeId !== undefined || body.staffId !== undefined) await checkReferences(db, storeId, staffId);
 
-  const items = body.items === undefined ? undefined : parseItems(body.items);
+  let items: SaleItem[] | undefined;
+  if (body.items !== undefined) {
+    const linked = await all<{ product_id: number }>(db.prepare('SELECT product_id FROM telecom_sale_items WHERE sale_id=? AND product_id IS NOT NULL').bind(saleId));
+    items = await resolveItems(db, parseItems(body.items), new Set(linked.map(r => Number(r.product_id))));
+  }
   if (items || body.discount !== undefined || body.vatRate !== undefined) {
     const sums = items ? sumItems(items) : { subtotal: Number(current.subtotal_halalas), cost: Number(current.cost_total_halalas) };
-    const discount = body.discount === undefined ? Number(current.discount_halalas) : body.discount === null || body.discount === '' ? 0 : sar(body.discount, 'discount');
+    const discount = body.discount === undefined ? Number(current.discount_halalas) : blank(body.discount) ? 0 : sar(body.discount, 'discount');
     const totals = computeTotals(sums.subtotal, sums.cost, discount, body.vatRate === undefined ? Number(current.vat_rate_bps) : vatBps(body.vatRate));
     set('subtotal_halalas', totals.subtotal); set('discount_halalas', totals.discount); set('vat_rate_bps', totals.vatBps);
     set('vat_amount_halalas', totals.vat); set('grand_total_halalas', totals.grand); set('cost_total_halalas', totals.cost);
   }
+
+  // Stock only changes when items, store or status change.
+  let changes: StockChange[] = [];
+  if (body.items !== undefined || body.storeId !== undefined || body.status !== undefined) {
+    const effective = items ?? (await all<{ product_id: number | null; quantity: number; track_stock: number | null }>(db.prepare(
+      'SELECT i.product_id,i.quantity,p.track_stock FROM telecom_sale_items i LEFT JOIN inventory_products p ON p.id=i.product_id WHERE i.sale_id=?'
+    ).bind(saleId))).map(r => ({ productId: r.product_id, quantity: r.quantity, tracked: r.track_stock === 1 }));
+    changes = saleStockChanges(desiredStock(effective, status, storeId), await recordedSaleStock(db, saleId), saleId, `Telecom sale ${String(current.bill_number)} updated`);
+    await assertStockAvailable(db, changes);
+  }
+
   set('updated_at', nowIso());
   const statements = [db.prepare(`UPDATE telecom_sales SET ${assignments.join(',')} WHERE id=?`).bind(...values, saleId)];
   if (items) statements.push(db.prepare('DELETE FROM telecom_sale_items WHERE sale_id=?').bind(saleId), ...itemStatements(db, { id: saleId }, items));
-  await batch(db, statements);
+  statements.push(...stockStatements(db, changes, claims.sub));
+  await runStockBatch(db, statements, changes);
   return { ...(await getSale(db, claims, saleId)), message: 'Sale updated successfully' };
 }
 
 export async function deleteSale(db: D1Database, claims: Claims, saleId: number) {
-  await loadSale(db, claims, saleId);
-  await batch(db, [db.prepare('DELETE FROM telecom_sales WHERE id=?').bind(saleId)]);
+  const { row } = await loadSale(db, claims, saleId);
+  const changes = saleStockChanges(new Map(), await recordedSaleStock(db, saleId), saleId, `Telecom sale ${String(row.bill_number)} deleted`);
+  await runStockBatch(db, [...stockStatements(db, changes, claims.sub), db.prepare('DELETE FROM telecom_sales WHERE id=?').bind(saleId)], changes);
   return { success: true, message: 'Sale deleted successfully' };
 }
 
@@ -242,7 +265,7 @@ export async function nextSaleNumber(db: D1Database) {
 }
 
 // ---------- report ----------
-export async function salesReport(db: D1Database, claims: Claims, query: (name: string) => string | undefined) {
+export async function salesReport(db: D1Database, claims: Claims, query: Query) {
   const range = reportRange(query);
   const clauses = ['s.sale_date>=?', 's.sale_date<=?'], bindings: unknown[] = [range.start, range.end];
   const scope = await actorStore(db, claims);
