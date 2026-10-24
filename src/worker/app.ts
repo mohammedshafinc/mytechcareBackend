@@ -14,6 +14,7 @@ import { createDocument, deleteDocument, generateInvoiceUbl, getDocument, listDo
 import { runDailyExpiry } from './expiry';
 import { createExpense, createRental, createVehicle, deleteExpense, deleteRental, deleteVehicle, getRental, getVehicle, listExpenses, listRentals, listVehicles, returnRental, updateExpense, updateRental, updateVehicle, vehicleReport } from './organization';
 import { buildReport } from './reports';
+import { createSale, deleteSale, getSale, listSales, nextSaleNumber, salesReport, updateSale } from './telecom';
 
 type Vars={config:Config;claims:Claims;requestId:string};
 type AppBindings={Bindings:Env;Variables:Vars};
@@ -198,6 +199,15 @@ app.get('/api/organization/rental-vehicles/:id',auth,requirePermission('ORGANIZA
 app.post('/api/organization/rental-vehicles',auth,requirePermission('ORGANIZATION','RENTAL_VEHICLES'),async c=>c.json(await createRental(c.get('config').DB,c.get('claims'),await jsonBody(c)),201));
 app.put('/api/organization/rental-vehicles/:id',auth,requirePermission('ORGANIZATION','RENTAL_VEHICLES'),async c=>c.json(await updateRental(c.get('config').DB,c.get('claims'),id(c.req.param('id')),await jsonBody(c))));
 app.delete('/api/organization/rental-vehicles/:id',auth,requirePermission('ORGANIZATION','RENTAL_VEHICLES'),async c=>c.json(await deleteRental(c.get('config').DB,c.get('claims'),id(c.req.param('id')))));
+// Telecom: sales bills (TELECOM_SALES) and sales report (TELECOM_REPORTS). Static paths precede /:id.
+const telecomSales=[auth,requirePermission('TELECOM','TELECOM_SALES')] as const;
+app.get('/api/telecom/sales',...telecomSales,async c=>c.json(await listSales(c.get('config').DB,c.get('claims'),name=>c.req.query(name))));
+app.post('/api/telecom/sales',...telecomSales,async c=>c.json(await createSale(c.get('config').DB,c.get('claims'),await jsonBody(c)),201));
+app.get('/api/telecom/sales/next-number',...telecomSales,async c=>c.json(await nextSaleNumber(c.get('config').DB)));
+app.get('/api/telecom/sales/:id',...telecomSales,async c=>c.json(await getSale(c.get('config').DB,c.get('claims'),id(c.req.param('id')))));
+app.put('/api/telecom/sales/:id',...telecomSales,async c=>c.json(await updateSale(c.get('config').DB,c.get('claims'),id(c.req.param('id')),await jsonBody(c))));
+app.delete('/api/telecom/sales/:id',...telecomSales,async c=>c.json(await deleteSale(c.get('config').DB,c.get('claims'),id(c.req.param('id')))));
+app.get('/api/telecom/reports/sales',auth,requirePermission('TELECOM','TELECOM_REPORTS'),async c=>c.json(await salesReport(c.get('config').DB,c.get('claims'),name=>c.req.query(name))));
 app.put('/api/organization/rental-vehicles/:id/return',auth,requirePermission('ORGANIZATION','RENTAL_VEHICLES'),async c=>c.json(await returnRental(c.get('config').DB,c.get('claims'),id(c.req.param('id')),await jsonBody(c))));
 
 async function accessible(claims:Claims,type:string){return claims.role==='SUPER_ADMIN'||(type==='new-request'?claims.modules?.includes('CLIENTS')&&claims.submodules?.includes('SERVICE_REQUESTS'):claims.modules?.includes('ORGANIZATION')&&claims.submodules?.includes('STAFF'));}
